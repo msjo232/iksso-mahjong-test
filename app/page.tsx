@@ -73,6 +73,55 @@ const timeOptions = Array.from({ length: 48 }, (_, i) => {
   return `${h}:${m}`;
 });
 
+const CHOSEONG = [
+  "ㄱ",
+  "ㄲ",
+  "ㄴ",
+  "ㄷ",
+  "ㄸ",
+  "ㄹ",
+  "ㅁ",
+  "ㅂ",
+  "ㅃ",
+  "ㅅ",
+  "ㅆ",
+  "ㅇ",
+  "ㅈ",
+  "ㅉ",
+  "ㅊ",
+  "ㅋ",
+  "ㅌ",
+  "ㅍ",
+  "ㅎ",
+];
+
+function getChoseong(text: string) {
+  return text
+    .split("")
+    .map((char) => {
+      const code = char.charCodeAt(0) - 0xac00;
+      if (code >= 0 && code <= 11171) {
+        return CHOSEONG[Math.floor(code / 588)];
+      }
+      return char;
+    })
+    .join("");
+}
+
+function matchesNickname(query: string, nickname: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const lowerNickname = nickname.toLowerCase();
+  const nicknameChoseong = getChoseong(nickname);
+
+  return (
+    lowerNickname.includes(q) ||
+    nicknameChoseong.includes(q) ||
+    nickname.includes(query.trim())
+  );
+}
+
 function timeToSlot(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   let slot = hour * 2 + (minute === 30 ? 1 : 0);
@@ -143,6 +192,9 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const [nicknameQuery, setNicknameQuery] = useState("");
+  const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
+
   const [form, setForm] = useState({
     nickname: "",
     date: getToday(),
@@ -176,6 +228,7 @@ export default function Page() {
           ...prev,
           nickname: prev.nickname || firstNickname,
         }));
+        setNicknameQuery((prev) => prev || firstNickname);
       }
     } catch (error) {
       setMessage(
@@ -238,9 +291,25 @@ export default function Page() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    if (form.nickname) {
+      setNicknameQuery(form.nickname);
+    }
+  }, [form.nickname]);
+
   const dayEntries = useMemo(() => {
     return entries.filter((item) => item.date === selectedDate);
   }, [entries, selectedDate]);
+
+  const filteredMembers = useMemo(() => {
+    if (!nicknameQuery.trim()) {
+      return members.slice(0, 8);
+    }
+
+    return members
+      .filter((member) => matchesNickname(nicknameQuery, member.nickname))
+      .slice(0, 8);
+  }, [members, nicknameQuery]);
 
   const overlapSummary = useMemo(() => {
     const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
@@ -343,66 +412,64 @@ export default function Page() {
     };
   }, [dayEntries]);
 
-const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
-  const MIN_DURATION_SLOTS = 4; // 2시간
-  const bestByTable = new Map<TableType, ConfirmCandidate>();
+  const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
+    const MIN_DURATION_SLOTS = 4; // 2시간
+    const bestByTable = new Map<TableType, ConfirmCandidate>();
 
-  (["1탁", "2탁"] as TableType[]).forEach((table) => {
-    const tableEntries = dayEntries.filter((entry) => entry.table === table);
+    (["1탁", "2탁"] as TableType[]).forEach((table) => {
+      const tableEntries = dayEntries.filter((entry) => entry.table === table);
 
-    for (let startSlot = 0; startSlot <= 48 - MIN_DURATION_SLOTS; startSlot += 1) {
-      for (let endSlot = startSlot + MIN_DURATION_SLOTS; endSlot <= 48; endSlot += 1) {
-        const names = tableEntries
-          .filter((entry) => {
-            const entryStart = timeToSlot(entry.start);
-            const entryEnd = timeToSlot(entry.end);
-            return entryStart <= startSlot && entryEnd >= endSlot;
-          })
-          .map((entry) => entry.nickname);
+      for (let startSlot = 0; startSlot <= 48 - MIN_DURATION_SLOTS; startSlot += 1) {
+        for (let endSlot = startSlot + MIN_DURATION_SLOTS; endSlot <= 48; endSlot += 1) {
+          const names = tableEntries
+            .filter((entry) => {
+              const entryStart = timeToSlot(entry.start);
+              const entryEnd = timeToSlot(entry.end);
+              return entryStart <= startSlot && entryEnd >= endSlot;
+            })
+            .map((entry) => entry.nickname);
 
-        const uniqueNames = [...new Set(names)];
+          const uniqueNames = [...new Set(names)];
 
-        if (uniqueNames.length >= 4) {
-          const candidate: ConfirmCandidate = {
-            table,
-            startSlot,
-            endSlot,
-            start: slotToTime(startSlot),
-            end: slotToTime(endSlot),
-            names: uniqueNames,
-          };
+          if (uniqueNames.length >= 4) {
+            const candidate: ConfirmCandidate = {
+              table,
+              startSlot,
+              endSlot,
+              start: slotToTime(startSlot),
+              end: slotToTime(endSlot),
+              names: uniqueNames,
+            };
 
-          const prev = bestByTable.get(table);
+            const prev = bestByTable.get(table);
 
-          if (!prev) {
-            bestByTable.set(table, candidate);
-            continue;
-          }
+            if (!prev) {
+              bestByTable.set(table, candidate);
+              continue;
+            }
 
-          const prevDuration = prev.endSlot - prev.startSlot;
-          const currentDuration = candidate.endSlot - candidate.startSlot;
+            const prevDuration = prev.endSlot - prev.startSlot;
+            const currentDuration = candidate.endSlot - candidate.startSlot;
 
-          const shouldReplace =
-            currentDuration > prevDuration ||
-            (currentDuration === prevDuration && candidate.names.length > prev.names.length) ||
-            (currentDuration === prevDuration &&
-              candidate.names.length === prev.names.length &&
-              candidate.startSlot < prev.startSlot);
+            const shouldReplace =
+              currentDuration > prevDuration ||
+              (currentDuration === prevDuration && candidate.names.length > prev.names.length) ||
+              (currentDuration === prevDuration &&
+                candidate.names.length === prev.names.length &&
+                candidate.startSlot < prev.startSlot);
 
-          if (shouldReplace) {
-            bestByTable.set(table, candidate);
+            if (shouldReplace) {
+              bestByTable.set(table, candidate);
+            }
           }
         }
       }
-    }
-  });
+    });
 
-  return (["1탁", "2탁"] as TableType[])
-    .map((table) => bestByTable.get(table))
-    .filter((item): item is ConfirmCandidate => Boolean(item));
-}, [dayEntries]);
-
-  
+    return (["1탁", "2탁"] as TableType[])
+      .map((table) => bestByTable.get(table))
+      .filter((item): item is ConfirmCandidate => Boolean(item));
+  }, [dayEntries]);
 
   const myEntries = useMemo(() => {
     return entries
@@ -447,6 +514,8 @@ ${memberLines}
       table: "1탁",
       memo: "",
     });
+    setNicknameQuery(currentUser);
+    setShowNicknameSuggestions(false);
     setEditingId(null);
   }
 
@@ -514,6 +583,8 @@ ${memberLines}
         table: "1탁",
         memo: "",
       });
+      setNicknameQuery(form.nickname);
+      setShowNicknameSuggestions(false);
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
@@ -533,6 +604,8 @@ ${memberLines}
       table: item.table,
       memo: item.memo,
     });
+    setNicknameQuery(item.nickname);
+    setShowNicknameSuggestions(false);
     setTab("input");
     setMessage("");
   }
@@ -686,7 +759,7 @@ ${memberLines}
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">카톡용 확정 메시지</h2>
-                  <span className="text-xs text-slate-400">최소 2시간 · 4명 이상 기준</span>
+                  <span className="text-xs text-slate-400">탁당 대표 1개 · 최소 2시간</span>
                 </div>
 
                 {loadingSchedules ? (
@@ -799,7 +872,7 @@ ${memberLines}
                               title={`${entry.nickname} ${entry.start}-${entry.end}`}
                             >
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="-rotate-90 whitespace-nowrap leading-none">
+                                <span className="-rotate-90 whitespace-nowrap leading-none text-[10px]">
                                   {entry.nickname}
                                 </span>
                               </div>
@@ -823,19 +896,52 @@ ${memberLines}
                 </p>
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
-                  <div>
+                  <div className="relative">
                     <label className="mb-2 block text-sm font-medium text-slate-700">닉네임</label>
-                    <select
-                      value={form.nickname}
-                      onChange={(e) => setForm((prev) => ({ ...prev, nickname: e.target.value }))}
+                    <input
+                      type="text"
+                      value={nicknameQuery}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNicknameQuery(value);
+                        setShowNicknameSuggestions(true);
+                        setForm((prev) => ({ ...prev, nickname: value }));
+                      }}
+                      onFocus={() => setShowNicknameSuggestions(true)}
+                      placeholder="닉네임 검색 (초성 가능)"
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
-                    >
-                      {members.map((user) => (
-                        <option key={user.nickname} value={user.nickname}>
-                          {user.nickname}
-                        </option>
-                      ))}
-                    </select>
+                    />
+
+                    {showNicknameSuggestions && filteredMembers.length > 0 && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-60 overflow-y-auto rounded-2xl border bg-white shadow-lg">
+                        {filteredMembers.map((user) => (
+                          <button
+                            key={user.nickname}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setForm((prev) => ({ ...prev, nickname: user.nickname }));
+                              setNicknameQuery(user.nickname);
+                              setShowNicknameSuggestions(false);
+                            }}
+                            className="block w-full border-b px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                          >
+                            <div className="font-medium">{user.nickname}</div>
+                            {user.name && (
+                              <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {showNicknameSuggestions &&
+                      nicknameQuery.trim() &&
+                      filteredMembers.length === 0 && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border bg-white px-4 py-3 text-sm text-slate-500 shadow-lg">
+                          검색 결과가 없어요.
+                        </div>
+                      )}
                   </div>
 
                   <div>
