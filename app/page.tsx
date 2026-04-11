@@ -172,7 +172,7 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
 }
 
 function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
-  return slot >= startSlot && slot < endSlot;
+  return slot >= startSlot && slot <= endSlot;
 }
 
 export default function Page() {
@@ -963,7 +963,6 @@ ${memberLines}
                   <div />
                   <div className="text-center text-xs font-semibold text-indigo-700">2탁</div>
 
-                  {/* 왼쪽 시간축 - 1탁 선택 시만 하이라이트 */}
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = leftAxisHighlight
@@ -990,7 +989,6 @@ ${memberLines}
                     })}
                   </div>
 
-                  {/* 1탁 */}
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
                     {timeOptions.map((_, i) => (
                       <div
@@ -1031,7 +1029,6 @@ ${memberLines}
                     })}
                   </div>
 
-                  {/* 가운데 시간축 - 2탁 선택 시만 하이라이트 */}
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = centerAxisHighlight
@@ -1048,7 +1045,7 @@ ${memberLines}
                             className={`rounded-md px-1.5 py-0.5 ${
                               active
                                 ? "bg-amber-200/90 font-semibold text-amber-900"
-                                : "text-slate-300"
+                                : "text-slate-400"
                             }`}
                           >
                             {time}
@@ -1058,7 +1055,6 @@ ${memberLines}
                     })}
                   </div>
 
-                  {/* 2탁 */}
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
                     {timeOptions.map((_, i) => (
                       <div
