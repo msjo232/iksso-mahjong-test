@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type TabType = "timeline" | "input" | "my";
 type TableType = "1탁" | "2탁";
+type MessageType = "success" | "warning" | "error";
 
 type Member = {
   nickname: string;
@@ -177,7 +178,10 @@ export default function Page() {
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
+
+  const [messageText, setMessageText] = useState("");
+  const [messageType, setMessageType] = useState<MessageType>("success");
+
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -204,9 +208,24 @@ export default function Page() {
     memo: "",
   });
 
+  function showToast(text: string, type: MessageType) {
+    setMessageText(text);
+    setMessageType(type);
+  }
+
+  useEffect(() => {
+    if (!messageText) return;
+
+    const timer = window.setTimeout(() => {
+      setMessageText("");
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [messageText]);
+
   async function loadMembers() {
     setLoadingMembers(true);
-    setMessage("");
+    setMessageText("");
 
     try {
       const res = await fetch("/api/mahjong?action=members", {
@@ -223,10 +242,11 @@ export default function Page() {
       setCurrentUserQuery("");
       setHasSelectedCurrentUser(false);
     } catch (error) {
-      setMessage(
+      showToast(
         error instanceof Error
           ? error.message
-          : "회원 목록을 불러오는 중 오류가 발생했습니다."
+          : "회원 목록을 불러오는 중 오류가 발생했습니다.",
+        "error"
       );
     } finally {
       setLoadingMembers(false);
@@ -235,7 +255,7 @@ export default function Page() {
 
   async function loadSchedules(date: string) {
     setLoadingSchedules(true);
-    setMessage("");
+    setMessageText("");
 
     try {
       const res = await fetch(
@@ -258,10 +278,11 @@ export default function Page() {
       setEntries(normalized);
       setSelectedTimelineEntries([]);
     } catch (error) {
-      setMessage(
+      showToast(
         error instanceof Error
           ? error.message
-          : "일정 데이터를 불러오는 중 오류가 발생했습니다."
+          : "일정 데이터를 불러오는 중 오류가 발생했습니다.",
+        "error"
       );
       setEntries([]);
       setSelectedTimelineEntries([]);
@@ -515,16 +536,16 @@ ${memberLines}
 
   async function copySelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) {
-      setMessage("선택한 4명의 공통 가능 시간이 없습니다.");
+      showToast("선택한 4명의 공통 가능 시간이 없습니다.", "error");
       return;
     }
 
     try {
       const text = buildSelectedGroupMessage();
       await navigator.clipboard.writeText(text);
-      setMessage("복사되었습니다.");
+      showToast("복사되었습니다.", "success");
     } catch {
-      setMessage("복사에 실패했습니다. 브라우저 권한을 확인해주세요.");
+      showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
     }
   }
 
@@ -547,7 +568,7 @@ ${memberLines}
   }
 
   function toggleTimelineEntry(entry: Entry) {
-    setMessage("");
+    setMessageText("");
 
     setSelectedTimelineEntries((prev) => {
       const exists = prev.some((item) => item.id === entry.id);
@@ -562,12 +583,12 @@ ${memberLines}
 
       const selectedTable = prev[0].table;
       if (selectedTable !== entry.table) {
-        setMessage("같은 탁의 인원만 함께 선택할 수 있어요.");
+        showToast("다른 탁은 선택할 수 없습니다.", "warning");
         return prev;
       }
 
       if (prev.length >= 4) {
-        setMessage("최대 4명까지만 선택할 수 있어요.");
+        showToast("최대 4명까지만 선택할 수 있어요.", "warning");
         return prev;
       }
 
@@ -579,12 +600,12 @@ ${memberLines}
     e.preventDefault();
 
     if (!form.nickname.trim()) {
-      setMessage("닉네임을 입력해주세요.");
+      showToast("닉네임을 입력해주세요.", "error");
       return;
     }
 
     if (timeToSlot(form.start) >= timeToSlot(form.end)) {
-      setMessage("종료시간은 시작시간보다 뒤여야 합니다.");
+      showToast("종료시간은 시작시간보다 뒤여야 합니다.", "error");
       return;
     }
 
@@ -597,12 +618,12 @@ ${memberLines}
     }).length;
 
     if (overlappingCount >= 5) {
-      setMessage(`${form.table}은 해당 시간대에 이미 최대 5명입니다. 탁이 다 찼습니다.`);
+      showToast(`${form.table}은 해당 시간대에 이미 최대 5명입니다. 탁이 다 찼습니다.`, "warning");
       return;
     }
 
     setSaving(true);
-    setMessage("");
+    setMessageText("");
 
     try {
       const res = await fetch("/api/mahjong", {
@@ -628,7 +649,7 @@ ${memberLines}
         throw new Error(data.message || "저장에 실패했습니다.");
       }
 
-      setMessage(editingId ? "일정을 수정했어요." : "일정을 저장했어요.");
+      showToast(editingId ? "일정을 수정했어요." : "일정을 저장했어요.", "success");
       setSelectedDate(form.date);
       setCurrentUser(form.nickname);
       setCurrentUserQuery(form.nickname);
@@ -649,8 +670,9 @@ ${memberLines}
       setNicknameQuery(form.nickname);
       setShowNicknameSuggestions(false);
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
+      showToast(
+        error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.",
+        "error"
       );
     } finally {
       setSaving(false);
@@ -670,11 +692,11 @@ ${memberLines}
     setNicknameQuery(item.nickname);
     setShowNicknameSuggestions(false);
     setTab("input");
-    setMessage("");
+    setMessageText("");
   }
 
   async function deleteEntry(id: string) {
-    setMessage("");
+    setMessageText("");
     setDeletingId(id);
 
     try {
@@ -695,23 +717,41 @@ ${memberLines}
         throw new Error(data.message || "삭제에 실패했습니다.");
       }
 
-      setMessage("일정을 삭제했어요.");
+      showToast("일정을 삭제했어요.", "success");
       await loadSchedules(selectedDate);
 
       if (editingId === id) {
         resetForm();
       }
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다."
+      showToast(
+        error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다.",
+        "error"
       );
     } finally {
       setDeletingId(null);
     }
   }
 
+  const toastColorClass =
+    messageType === "success"
+      ? "bg-emerald-500"
+      : messageType === "warning"
+      ? "bg-amber-500"
+      : "bg-rose-500";
+
   return (
     <div className="min-h-screen bg-slate-100 pb-24">
+      {messageText && (
+        <div className="fixed left-1/2 top-4 z-[100] w-[calc(100%-24px)] max-w-md -translate-x-1/2">
+          <div
+            className={`rounded-2xl px-4 py-3 text-center text-sm font-semibold text-white shadow-lg ${toastColorClass}`}
+          >
+            {messageText}
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
         <header className="bg-blue-600 px-4 pb-5 pt-6 text-white">
           <h1 className="text-xl font-bold">
@@ -789,12 +829,6 @@ ${memberLines}
             </div>
           </div>
         </div>
-
-        {message && (
-          <div className="mx-3 mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {message}
-          </div>
-        )}
 
         <main className="flex-1">
           {tab === "timeline" && (
