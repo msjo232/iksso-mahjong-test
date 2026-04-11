@@ -197,6 +197,7 @@ export default function Page() {
 
   const [currentUserQuery, setCurrentUserQuery] = useState("");
   const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
+  const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
   const currentUserBoxRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +228,7 @@ export default function Page() {
       setMembers(data.members);
       setCurrentUser("");
       setCurrentUserQuery("");
+      setHasSelectedCurrentUser(false);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -285,6 +287,11 @@ export default function Page() {
   useEffect(() => {
     if (currentUser) {
       setCurrentUserQuery(currentUser);
+      setForm((prev) => ({
+        ...prev,
+        nickname: prev.nickname || currentUser,
+      }));
+      setNicknameQuery((prev) => prev || currentUser);
     }
   }, [currentUser]);
 
@@ -304,6 +311,11 @@ export default function Page() {
 
       if (currentUserBoxRef.current && !currentUserBoxRef.current.contains(target)) {
         setShowCurrentUserSuggestions(false);
+        if (hasSelectedCurrentUser && currentUser) {
+          setCurrentUserQuery(currentUser);
+        } else {
+          setCurrentUserQuery("");
+        }
       }
     }
 
@@ -311,7 +323,7 @@ export default function Page() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [currentUser, hasSelectedCurrentUser]);
 
   const dayEntries = useMemo(() => {
     return entries.filter((item) => item.date === selectedDate);
@@ -535,14 +547,14 @@ ${memberLines}
 
   function resetForm() {
     setForm({
-      nickname: "",
+      nickname: currentUser,
       date: selectedDate,
       start: "19:00",
       end: "23:00",
       table: "1탁",
       memo: "",
     });
-    setNicknameQuery("");
+    setNicknameQuery(currentUser);
     setShowNicknameSuggestions(false);
     setEditingId(null);
   }
@@ -603,6 +615,8 @@ ${memberLines}
       setMessage(editingId ? "일정을 수정했어요." : "일정을 저장했어요.");
       setSelectedDate(form.date);
       setCurrentUser(form.nickname);
+      setCurrentUserQuery(form.nickname);
+      setHasSelectedCurrentUser(true);
       setTab("my");
       setEditingId(null);
 
@@ -702,15 +716,17 @@ ${memberLines}
             <div className="relative" ref={currentUserBoxRef}>
               <input
                 type="text"
-                value={showCurrentUserSuggestions ? currentUserQuery : ""}
+                value={hasSelectedCurrentUser ? currentUserQuery : showCurrentUserSuggestions ? currentUserQuery : ""}
                 onChange={(e) => {
                   const value = e.target.value;
                   setCurrentUserQuery(value);
                   setShowCurrentUserSuggestions(true);
                 }}
                 onFocus={() => {
-                  setCurrentUserQuery("");
                   setShowCurrentUserSuggestions(true);
+                  if (!hasSelectedCurrentUser) {
+                    setCurrentUserQuery("");
+                  }
                 }}
                 placeholder={loadingMembers ? "회원 불러오는 중..." : "회원검색"}
                 disabled={loadingMembers || members.length === 0}
@@ -727,7 +743,13 @@ ${memberLines}
                       onClick={() => {
                         setCurrentUser(user.nickname);
                         setCurrentUserQuery(user.nickname);
+                        setHasSelectedCurrentUser(true);
                         setShowCurrentUserSuggestions(false);
+                        setForm((prev) => ({
+                          ...prev,
+                          nickname: user.nickname,
+                        }));
+                        setNicknameQuery(user.nickname);
                       }}
                       className="block w-full border-b px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
                     >
