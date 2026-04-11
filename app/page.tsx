@@ -343,61 +343,66 @@ export default function Page() {
     };
   }, [dayEntries]);
 
-  const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
-    const results: ConfirmCandidate[] = [];
-    const MIN_DURATION_SLOTS = 4; // 2시간
-    const seen = new Set<string>();
+const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
+  const MIN_DURATION_SLOTS = 4; // 2시간
+  const bestByTable = new Map<TableType, ConfirmCandidate>();
 
-    (["1탁", "2탁"] as TableType[]).forEach((table) => {
-      const tableEntries = dayEntries.filter((entry) => entry.table === table);
+  (["1탁", "2탁"] as TableType[]).forEach((table) => {
+    const tableEntries = dayEntries.filter((entry) => entry.table === table);
 
-      for (let startSlot = 0; startSlot <= 48 - MIN_DURATION_SLOTS; startSlot += 1) {
-        for (let endSlot = startSlot + MIN_DURATION_SLOTS; endSlot <= 48; endSlot += 1) {
-          const names = tableEntries
-            .filter((entry) => {
-              const entryStart = timeToSlot(entry.start);
-              const entryEnd = timeToSlot(entry.end);
-              return entryStart <= startSlot && entryEnd >= endSlot;
-            })
-            .map((entry) => entry.nickname);
+    for (let startSlot = 0; startSlot <= 48 - MIN_DURATION_SLOTS; startSlot += 1) {
+      for (let endSlot = startSlot + MIN_DURATION_SLOTS; endSlot <= 48; endSlot += 1) {
+        const names = tableEntries
+          .filter((entry) => {
+            const entryStart = timeToSlot(entry.start);
+            const entryEnd = timeToSlot(entry.end);
+            return entryStart <= startSlot && entryEnd >= endSlot;
+          })
+          .map((entry) => entry.nickname);
 
-          const uniqueNames = [...new Set(names)];
+        const uniqueNames = [...new Set(names)];
 
-          if (uniqueNames.length >= 4) {
-            const key = `${table}-${startSlot}-${endSlot}`;
+        if (uniqueNames.length >= 4) {
+          const candidate: ConfirmCandidate = {
+            table,
+            startSlot,
+            endSlot,
+            start: slotToTime(startSlot),
+            end: slotToTime(endSlot),
+            names: uniqueNames,
+          };
 
-            if (!seen.has(key)) {
-              seen.add(key);
-              results.push({
-                table,
-                startSlot,
-                endSlot,
-                start: slotToTime(startSlot),
-                end: slotToTime(endSlot),
-                names: uniqueNames,
-              });
-            }
+          const prev = bestByTable.get(table);
+
+          if (!prev) {
+            bestByTable.set(table, candidate);
+            continue;
+          }
+
+          const prevDuration = prev.endSlot - prev.startSlot;
+          const currentDuration = candidate.endSlot - candidate.startSlot;
+
+          const shouldReplace =
+            currentDuration > prevDuration ||
+            (currentDuration === prevDuration && candidate.names.length > prev.names.length) ||
+            (currentDuration === prevDuration &&
+              candidate.names.length === prev.names.length &&
+              candidate.startSlot < prev.startSlot);
+
+          if (shouldReplace) {
+            bestByTable.set(table, candidate);
           }
         }
       }
-    });
+    }
+  });
 
-    const bestMap = new Map<string, ConfirmCandidate>();
+  return (["1탁", "2탁"] as TableType[])
+    .map((table) => bestByTable.get(table))
+    .filter((item): item is ConfirmCandidate => Boolean(item));
+}, [dayEntries]);
 
-    results.forEach((candidate) => {
-      const key = `${candidate.table}-${candidate.startSlot}`;
-      const prev = bestMap.get(key);
-
-      if (!prev || candidate.endSlot > prev.endSlot) {
-        bestMap.set(key, candidate);
-      }
-    });
-
-    return [...bestMap.values()].sort((a, b) => {
-      if (a.table !== b.table) return a.table.localeCompare(b.table);
-      return a.startSlot - b.startSlot;
-    });
-  }, [dayEntries]);
+  
 
   const myEntries = useMemo(() => {
     return entries
