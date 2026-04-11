@@ -225,18 +225,8 @@ export default function Page() {
       }
 
       setMembers(data.members);
-
-      if (data.members.length > 0) {
-        const firstNickname = data.members[0].nickname;
-
-        setCurrentUser((prev) => prev || firstNickname);
-        setForm((prev) => ({
-          ...prev,
-          nickname: prev.nickname || firstNickname,
-        }));
-        setNicknameQuery((prev) => prev || firstNickname);
-        setCurrentUserQuery((prev) => prev || firstNickname);
-      }
+      setCurrentUser("");
+      setCurrentUserQuery("");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -294,7 +284,6 @@ export default function Page() {
 
   useEffect(() => {
     if (currentUser) {
-      setForm((prev) => ({ ...prev, nickname: currentUser }));
       setCurrentUserQuery(currentUser);
     }
   }, [currentUser]);
@@ -509,12 +498,14 @@ export default function Page() {
   }, [dayEntries]);
 
   const myEntries = useMemo(() => {
-    return entries
-      .filter((item) => item.nickname === currentUser)
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return timeToSlot(a.start) - timeToSlot(b.start);
-      });
+    return currentUser
+      ? entries
+          .filter((item) => item.nickname === currentUser)
+          .sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return timeToSlot(a.start) - timeToSlot(b.start);
+          })
+      : [];
   }, [entries, currentUser]);
 
   function buildConfirmMessage(candidate: ConfirmCandidate) {
@@ -544,20 +535,25 @@ ${memberLines}
 
   function resetForm() {
     setForm({
-      nickname: currentUser,
+      nickname: "",
       date: selectedDate,
       start: "19:00",
       end: "23:00",
       table: "1탁",
       memo: "",
     });
-    setNicknameQuery(currentUser);
+    setNicknameQuery("");
     setShowNicknameSuggestions(false);
     setEditingId(null);
   }
 
   async function saveEntry(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!form.nickname.trim()) {
+      setMessage("닉네임을 입력해주세요.");
+      return;
+    }
 
     if (timeToSlot(form.start) >= timeToSlot(form.end)) {
       setMessage("종료시간은 시작시간보다 뒤여야 합니다.");
@@ -752,12 +748,6 @@ ${memberLines}
                     검색 결과가 없어요.
                   </div>
                 )}
-
-              {currentUser && !showCurrentUserSuggestions && (
-                <div className="mt-1 px-1 text-xs text-slate-500">
-                  현재 선택: {currentUser}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1116,13 +1106,15 @@ ${memberLines}
             <div className="p-3">
               <div className="mb-3 rounded-3xl border bg-slate-50 p-4">
                 <h2 className="text-lg font-semibold text-slate-800">내 일정</h2>
-                <p className="mt-1 text-sm text-slate-500">현재 선택된 닉네임: {currentUser}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  현재 선택된 닉네임: {currentUser || "선택 안 됨"}
+                </p>
               </div>
 
               <div className="space-y-3">
                 {myEntries.length === 0 ? (
                   <div className="rounded-3xl border bg-slate-50 p-6 text-sm text-slate-500">
-                    선택한 날짜에 입력한 일정이 없습니다.
+                    선택한 회원의 일정이 없습니다.
                   </div>
                 ) : (
                   myEntries.map((item) => (
