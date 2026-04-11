@@ -46,6 +46,15 @@ type TimelineEntry = Entry & {
   lane: number;
 };
 
+type ConfirmCandidate = {
+  table: TableType;
+  startSlot: number;
+  endSlot: number;
+  start: string;
+  end: string;
+  names: string[];
+};
+
 function getToday() {
   const now = new Date();
   const year = now.getFullYear();
@@ -332,7 +341,7 @@ export default function Page() {
       "2탁": assignLanes(dayEntries.filter((entry) => entry.table === "2탁")),
     };
   }, [dayEntries]);
-
+ 
   const myEntries = useMemo(() => {
     return entries
       .filter((item) => item.nickname === currentUser)
