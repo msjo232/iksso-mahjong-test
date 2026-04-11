@@ -706,14 +706,17 @@ ${memberLines}
             <div className="relative" ref={currentUserBoxRef}>
               <input
                 type="text"
-                value={currentUserQuery}
+                value={showCurrentUserSuggestions ? currentUserQuery : ""}
                 onChange={(e) => {
                   const value = e.target.value;
                   setCurrentUserQuery(value);
                   setShowCurrentUserSuggestions(true);
                 }}
-                onFocus={() => setShowCurrentUserSuggestions(true)}
-                placeholder={loadingMembers ? "회원 불러오는 중..." : "회원 검색"}
+                onFocus={() => {
+                  setCurrentUserQuery("");
+                  setShowCurrentUserSuggestions(true);
+                }}
+                placeholder={loadingMembers ? "회원 불러오는 중..." : "회원검색"}
                 disabled={loadingMembers || members.length === 0}
                 className="w-full rounded-xl border px-3 py-2 text-sm"
               />
@@ -749,6 +752,12 @@ ${memberLines}
                     검색 결과가 없어요.
                   </div>
                 )}
+
+              {currentUser && !showCurrentUserSuggestions && (
+                <div className="mt-1 px-1 text-xs text-slate-500">
+                  현재 선택: {currentUser}
+                </div>
+              )}
             </div>
           </div>
         </div>
