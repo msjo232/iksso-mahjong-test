@@ -141,6 +141,7 @@ export default function Page() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     nickname: "",
@@ -344,59 +345,58 @@ export default function Page() {
 
   const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
     const results: ConfirmCandidate[] = [];
+    const MIN_DURATION_SLOTS = 4; // 2시간
+    const seen = new Set<string>();
 
     (["1탁", "2탁"] as TableType[]).forEach((table) => {
       const tableEntries = dayEntries.filter((entry) => entry.table === table);
 
-      const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
-
-      tableEntries.forEach((entry) => {
-        const start = timeToSlot(entry.start);
-        const end = timeToSlot(entry.end);
-        for (let s = start; s < end; s += 1) {
-          counts[s].count += 1;
-        }
-      });
-
-      let rangeStart: number | null = null;
-
-      for (let i = 0; i < counts.length; i += 1) {
-        const active = counts[i].count >= 4;
-
-        if (active && rangeStart === null) {
-          rangeStart = i;
-        }
-
-        if ((!active || i === counts.length - 1) && rangeStart !== null) {
-          const endSlot = active && i === counts.length - 1 ? i + 1 : i;
-
+      for (let startSlot = 0; startSlot <= 48 - MIN_DURATION_SLOTS; startSlot += 1) {
+        for (let endSlot = startSlot + MIN_DURATION_SLOTS; endSlot <= 48; endSlot += 1) {
           const names = tableEntries
             .filter((entry) => {
               const entryStart = timeToSlot(entry.start);
               const entryEnd = timeToSlot(entry.end);
-              return entryStart <= rangeStart! && entryEnd >= endSlot;
+              return entryStart <= startSlot && entryEnd >= endSlot;
             })
             .map((entry) => entry.nickname);
 
           const uniqueNames = [...new Set(names)];
 
           if (uniqueNames.length >= 4) {
-            results.push({
-              table,
-              startSlot: rangeStart,
-              endSlot,
-              start: slotToTime(rangeStart),
-              end: slotToTime(endSlot),
-              names: uniqueNames,
-            });
-          }
+            const key = `${table}-${startSlot}-${endSlot}`;
 
-          rangeStart = null;
+            if (!seen.has(key)) {
+              seen.add(key);
+              results.push({
+                table,
+                startSlot,
+                endSlot,
+                start: slotToTime(startSlot),
+                end: slotToTime(endSlot),
+                names: uniqueNames,
+              });
+            }
+          }
         }
       }
     });
 
-    return results;
+    const bestMap = new Map<string, ConfirmCandidate>();
+
+    results.forEach((candidate) => {
+      const key = `${candidate.table}-${candidate.startSlot}`;
+      const prev = bestMap.get(key);
+
+      if (!prev || candidate.endSlot > prev.endSlot) {
+        bestMap.set(key, candidate);
+      }
+    });
+
+    return [...bestMap.values()].sort((a, b) => {
+      if (a.table !== b.table) return a.table.localeCompare(b.table);
+      return a.startSlot - b.startSlot;
+    });
   }, [dayEntries]);
 
   const myEntries = useMemo(() => {
@@ -534,6 +534,7 @@ ${memberLines}
 
   async function deleteEntry(id: string) {
     setMessage("");
+    setDeletingId(id);
 
     try {
       const res = await fetch("/api/mahjong", {
@@ -563,6 +564,8 @@ ${memberLines}
       setMessage(
         error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다."
       );
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -678,7 +681,7 @@ ${memberLines}
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">카톡용 확정 메시지</h2>
-                  <span className="text-xs text-slate-400">4명 이상 구간 기준</span>
+                  <span className="text-xs text-slate-400">최소 2시간 · 4명 이상 기준</span>
                 </div>
 
                 {loadingSchedules ? (
@@ -748,10 +751,7 @@ ${memberLines}
 
                   {(["1탁", "2탁"] as const).map((column) => {
                     const columnEntries = timelineByTable[column];
-                    const barColor =
-                      column === "1탁"
-                        ? "bg-emerald-500"
-                        : "bg-indigo-500";
+                    const barColor = column === "1탁" ? "bg-emerald-500" : "bg-indigo-500";
 
                     return (
                       <div
@@ -962,9 +962,10 @@ ${memberLines}
                           <button
                             type="button"
                             onClick={() => deleteEntry(item.id)}
-                            className="rounded-2xl bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700"
+                            disabled={deletingId !== null}
+                            className="rounded-2xl bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-50"
                           >
-                            삭제
+                            {deletingId === item.id ? "삭제중..." : "삭제"}
                           </button>
                         </div>
                       </div>
