@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type TabType = "timeline" | "input" | "my";
 type TableType = "1탁" | "2탁";
@@ -195,6 +195,12 @@ export default function Page() {
   const [nicknameQuery, setNicknameQuery] = useState("");
   const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
 
+  const [currentUserQuery, setCurrentUserQuery] = useState("");
+  const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
+
+  const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
+  const currentUserBoxRef = useRef<HTMLDivElement | null>(null);
+
   const [form, setForm] = useState({
     nickname: "",
     date: getToday(),
@@ -229,6 +235,7 @@ export default function Page() {
           nickname: prev.nickname || firstNickname,
         }));
         setNicknameQuery((prev) => prev || firstNickname);
+        setCurrentUserQuery((prev) => prev || firstNickname);
       }
     } catch (error) {
       setMessage(
@@ -288,6 +295,7 @@ export default function Page() {
   useEffect(() => {
     if (currentUser) {
       setForm((prev) => ({ ...prev, nickname: currentUser }));
+      setCurrentUserQuery(currentUser);
     }
   }, [currentUser]);
 
@@ -296,6 +304,25 @@ export default function Page() {
       setNicknameQuery(form.nickname);
     }
   }, [form.nickname]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+
+      if (nicknameBoxRef.current && !nicknameBoxRef.current.contains(target)) {
+        setShowNicknameSuggestions(false);
+      }
+
+      if (currentUserBoxRef.current && !currentUserBoxRef.current.contains(target)) {
+        setShowCurrentUserSuggestions(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const dayEntries = useMemo(() => {
     return entries.filter((item) => item.date === selectedDate);
@@ -310,6 +337,16 @@ export default function Page() {
       .filter((member) => matchesNickname(nicknameQuery, member.nickname))
       .slice(0, 8);
   }, [members, nicknameQuery]);
+
+  const filteredCurrentUsers = useMemo(() => {
+    if (!currentUserQuery.trim()) {
+      return members.slice(0, 8);
+    }
+
+    return members
+      .filter((member) => matchesNickname(currentUserQuery, member.nickname))
+      .slice(0, 8);
+  }, [members, currentUserQuery]);
 
   const overlapSummary = useMemo(() => {
     const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
@@ -413,7 +450,7 @@ export default function Page() {
   }, [dayEntries]);
 
   const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
-    const MIN_DURATION_SLOTS = 4; // 2시간
+    const MIN_DURATION_SLOTS = 4;
     const bestByTable = new Map<TableType, ConfirmCandidate>();
 
     (["1탁", "2탁"] as TableType[]).forEach((table) => {
@@ -665,24 +702,54 @@ ${memberLines}
               onChange={(e) => setSelectedDate(e.target.value)}
               className="rounded-xl border px-3 py-2 text-sm"
             />
-            <select
-              value={currentUser}
-              onChange={(e) => setCurrentUser(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-              disabled={loadingMembers || members.length === 0}
-            >
-              {loadingMembers ? (
-                <option>회원 불러오는 중...</option>
-              ) : members.length === 0 ? (
-                <option>회원 없음</option>
-              ) : (
-                members.map((user) => (
-                  <option key={user.nickname} value={user.nickname}>
-                    {user.nickname}
-                  </option>
-                ))
+
+            <div className="relative" ref={currentUserBoxRef}>
+              <input
+                type="text"
+                value={currentUserQuery}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCurrentUserQuery(value);
+                  setShowCurrentUserSuggestions(true);
+                }}
+                onFocus={() => setShowCurrentUserSuggestions(true)}
+                placeholder={loadingMembers ? "회원 불러오는 중..." : "회원 검색"}
+                disabled={loadingMembers || members.length === 0}
+                className="w-full rounded-xl border px-3 py-2 text-sm"
+              />
+
+              {showCurrentUserSuggestions && filteredCurrentUsers.length > 0 && !loadingMembers && (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-60 overflow-y-auto rounded-2xl border bg-white shadow-lg">
+                  {filteredCurrentUsers.map((user) => (
+                    <button
+                      key={user.nickname}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setCurrentUser(user.nickname);
+                        setCurrentUserQuery(user.nickname);
+                        setShowCurrentUserSuggestions(false);
+                      }}
+                      className="block w-full border-b px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                    >
+                      <div className="font-medium">{user.nickname}</div>
+                      {user.name && (
+                        <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
               )}
-            </select>
+
+              {showCurrentUserSuggestions &&
+                currentUserQuery.trim() &&
+                filteredCurrentUsers.length === 0 &&
+                !loadingMembers && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border bg-white px-4 py-3 text-sm text-slate-500 shadow-lg">
+                    검색 결과가 없어요.
+                  </div>
+                )}
+            </div>
           </div>
         </div>
 
@@ -896,7 +963,7 @@ ${memberLines}
                 </p>
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
-                  <div className="relative">
+                  <div className="relative" ref={nicknameBoxRef}>
                     <label className="mb-2 block text-sm font-medium text-slate-700">닉네임</label>
                     <input
                       type="text"
