@@ -341,7 +341,64 @@ export default function Page() {
       "2탁": assignLanes(dayEntries.filter((entry) => entry.table === "2탁")),
     };
   }, [dayEntries]);
- 
+
+  const confirmCandidates = useMemo<ConfirmCandidate[]>(() => {
+    const results: ConfirmCandidate[] = [];
+
+    (["1탁", "2탁"] as TableType[]).forEach((table) => {
+      const tableEntries = dayEntries.filter((entry) => entry.table === table);
+
+      const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
+
+      tableEntries.forEach((entry) => {
+        const start = timeToSlot(entry.start);
+        const end = timeToSlot(entry.end);
+        for (let s = start; s < end; s += 1) {
+          counts[s].count += 1;
+        }
+      });
+
+      let rangeStart: number | null = null;
+
+      for (let i = 0; i < counts.length; i += 1) {
+        const active = counts[i].count >= 4;
+
+        if (active && rangeStart === null) {
+          rangeStart = i;
+        }
+
+        if ((!active || i === counts.length - 1) && rangeStart !== null) {
+          const endSlot = active && i === counts.length - 1 ? i + 1 : i;
+
+          const names = tableEntries
+            .filter((entry) => {
+              const entryStart = timeToSlot(entry.start);
+              const entryEnd = timeToSlot(entry.end);
+              return entryStart <= rangeStart! && entryEnd >= endSlot;
+            })
+            .map((entry) => entry.nickname);
+
+          const uniqueNames = [...new Set(names)];
+
+          if (uniqueNames.length >= 4) {
+            results.push({
+              table,
+              startSlot: rangeStart,
+              endSlot,
+              start: slotToTime(rangeStart),
+              end: slotToTime(endSlot),
+              names: uniqueNames,
+            });
+          }
+
+          rangeStart = null;
+        }
+      }
+    });
+
+    return results;
+  }, [dayEntries]);
+
   const myEntries = useMemo(() => {
     return entries
       .filter((item) => item.nickname === currentUser)
@@ -350,6 +407,31 @@ export default function Page() {
         return timeToSlot(a.start) - timeToSlot(b.start);
       });
   }, [entries, currentUser]);
+
+  function buildConfirmMessage(candidate: ConfirmCandidate) {
+    const memberLines = candidate.names.map((name) => `- ${name}`).join("\n");
+
+    return `🀄 익쏘 마작 모임 확정
+
+📅 ${selectedDate}
+🕒 ${candidate.start} ~ ${candidate.end}
+🪑 ${candidate.table}
+
+참여 가능 인원
+${memberLines}
+
+참여 가능하신 분들은 톡방에 확인 남겨주세요.`;
+  }
+
+  async function copyConfirmMessage(candidate: ConfirmCandidate) {
+    try {
+      const text = buildConfirmMessage(candidate);
+      await navigator.clipboard.writeText(text);
+      setMessage(`${candidate.table} ${candidate.start} ~ ${candidate.end} 확정 메시지를 복사했어요.`);
+    } catch {
+      setMessage("복사에 실패했습니다. 브라우저 권한을 확인해주세요.");
+    }
+  }
 
   function resetForm() {
     setForm({
@@ -488,7 +570,9 @@ export default function Page() {
     <div className="min-h-screen bg-slate-100 pb-24">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
         <header className="bg-blue-600 px-4 pb-5 pt-6 text-white">
-          <h1 className="text-xl font-bold">익쏘 마작 시간 조율 시스템 <span className="text-sm text-yellow-300">(테스트)</span></h1>
+          <h1 className="text-xl font-bold">
+            익쏘 마작 시간 조율 시스템 <span className="text-sm text-yellow-300">(테스트)</span>
+          </h1>
           <p className="mt-1 text-sm text-blue-100">모바일 전용 · 1탁 / 2탁 · 06:00 기준</p>
         </header>
 
@@ -589,6 +673,54 @@ export default function Page() {
                     )
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-3xl border bg-white p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-slate-800">카톡용 확정 메시지</h2>
+                  <span className="text-xs text-slate-400">4명 이상 구간 기준</span>
+                </div>
+
+                {loadingSchedules ? (
+                  <div className="rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                    후보를 불러오는 중입니다.
+                  </div>
+                ) : confirmCandidates.length === 0 ? (
+                  <div className="rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                    아직 확정 메시지를 만들 수 있는 구간이 없어요.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {confirmCandidates.map((candidate, idx) => (
+                      <div
+                        key={`${candidate.table}-${candidate.start}-${candidate.end}-${idx}`}
+                        className="rounded-2xl border bg-slate-50 px-3 py-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-800">
+                              {candidate.table} · {candidate.start} ~ {candidate.end}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              가능 인원 {candidate.names.length}명
+                            </div>
+                            <div className="mt-2 text-xs text-slate-600">
+                              {candidate.names.join(", ")}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => copyConfirmMessage(candidate)}
+                            className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+                          >
+                            복사
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-3xl border bg-white p-3">
@@ -879,4 +1011,3 @@ export default function Page() {
     </div>
   );
 }
-
