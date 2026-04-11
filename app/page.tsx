@@ -171,6 +171,10 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
   });
 }
 
+function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
+  return slot >= startSlot && slot < endSlot;
+}
+
 export default function Page() {
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
@@ -400,40 +404,6 @@ export default function Page() {
     return result;
   }, [dayEntries]);
 
-  const highlightRanges = useMemo(() => {
-    const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
-
-    dayEntries.forEach((entry) => {
-      const start = timeToSlot(entry.start);
-      const end = timeToSlot(entry.end);
-      for (let s = start; s < end; s += 1) {
-        counts[s].count += 1;
-      }
-    });
-
-    const result: Array<{ startSlot: number; endSlot: number }> = [];
-    let rangeStart: number | null = null;
-
-    for (let i = 0; i < counts.length; i += 1) {
-      const active = counts[i].count >= 4;
-
-      if (active && rangeStart === null) {
-        rangeStart = i;
-      }
-
-      if ((!active || i === counts.length - 1) && rangeStart !== null) {
-        const endSlot = active && i === counts.length - 1 ? i + 1 : i;
-        result.push({
-          startSlot: rangeStart,
-          endSlot,
-        });
-        rangeStart = null;
-      }
-    }
-
-    return result;
-  }, [dayEntries]);
-
   const tableWarnings = useMemo(() => {
     return (["1탁", "2탁"] as TableType[]).map((table) => {
       const tableEntries = dayEntries.filter((entry) => entry.table === table);
@@ -492,6 +462,8 @@ export default function Page() {
         hasCommonTime: false,
         start: "",
         end: "",
+        startSlot: -1,
+        endSlot: -1,
       };
     }
 
@@ -505,6 +477,8 @@ export default function Page() {
         hasCommonTime: false,
         start: "",
         end: "",
+        startSlot: -1,
+        endSlot: -1,
       };
     }
 
@@ -514,8 +488,28 @@ export default function Page() {
       hasCommonTime: true,
       start: slotToTime(startSlot),
       end: slotToTime(endSlot),
+      startSlot,
+      endSlot,
     };
   }, [selectedTimelineEntries]);
+
+  const leftAxisHighlight = useMemo(() => {
+    if (!selectedTimelineInfo?.hasCommonTime) return null;
+    if (selectedTimelineInfo.table !== "1탁") return null;
+    return {
+      startSlot: selectedTimelineInfo.startSlot,
+      endSlot: selectedTimelineInfo.endSlot,
+    };
+  }, [selectedTimelineInfo]);
+
+  const centerAxisHighlight = useMemo(() => {
+    if (!selectedTimelineInfo?.hasCommonTime) return null;
+    if (selectedTimelineInfo.table !== "2탁") return null;
+    return {
+      startSlot: selectedTimelineInfo.startSlot,
+      endSlot: selectedTimelineInfo.endSlot,
+    };
+  }, [selectedTimelineInfo]);
 
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
@@ -772,7 +766,13 @@ ${memberLines}
             <div className="relative" ref={currentUserBoxRef}>
               <input
                 type="text"
-                value={hasSelectedCurrentUser ? currentUserQuery : showCurrentUserSuggestions ? currentUserQuery : ""}
+                value={
+                  hasSelectedCurrentUser
+                    ? currentUserQuery
+                    : showCurrentUserSuggestions
+                    ? currentUserQuery
+                    : ""
+                }
                 onChange={(e) => {
                   const value = e.target.value;
                   setCurrentUserQuery(value);
@@ -957,83 +957,147 @@ ${memberLines}
                   </div>
                 )}
 
-                <div className="grid grid-cols-[50px_repeat(2,minmax(0,1fr))] gap-2">
+                <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
                   <div />
                   <div className="text-center text-xs font-semibold text-emerald-700">1탁</div>
+                  <div />
                   <div className="text-center text-xs font-semibold text-indigo-700">2탁</div>
 
+                  {/* 왼쪽 시간축 - 1탁 선택 시만 하이라이트 */}
                   <div className="relative h-[960px]">
-                    {timeOptions.map((time, i) => (
-                      <div
-                        key={time}
-                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px] text-slate-400"
-                        style={{ top: `${i * 20}px` }}
-                      >
-                        {time}
-                      </div>
-                    ))}
+                    {timeOptions.map((time, i) => {
+                      const active = leftAxisHighlight
+                        ? isSlotInRange(i, leftAxisHighlight.startSlot, leftAxisHighlight.endSlot)
+                        : false;
+
+                      return (
+                        <div
+                          key={`left-${time}`}
+                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px]"
+                          style={{ top: `${i * 20}px` }}
+                        >
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 ${
+                              active
+                                ? "bg-amber-200/90 font-semibold text-amber-900"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {time}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {(["1탁", "2탁"] as const).map((column) => {
-                    const columnEntries = timelineByTable[column];
-                    const barColor = column === "1탁" ? "bg-emerald-500" : "bg-indigo-500";
-
-                    return (
+                  {/* 1탁 */}
+                  <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
+                    {timeOptions.map((_, i) => (
                       <div
-                        key={column}
-                        className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50"
-                      >
-                        {highlightRanges.map((range, idx) => (
-                          <div
-                            key={`highlight-${idx}`}
-                            className="absolute left-0 right-0 bg-amber-100/70"
-                            style={{
-                              top: `${range.startSlot * 20}px`,
-                              height: `${(range.endSlot - range.startSlot) * 20}px`,
-                            }}
-                          />
-                        ))}
+                        key={`line-1-${i}`}
+                        className="absolute left-0 right-0 border-t border-slate-200"
+                        style={{ top: `${i * 20}px` }}
+                      />
+                    ))}
 
-                        {timeOptions.map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute left-0 right-0 border-t border-slate-200"
-                            style={{ top: `${i * 20}px` }}
-                          />
-                        ))}
+                    {timelineByTable["1탁"].map((entry) => {
+                      const start = timeToSlot(entry.start);
+                      const end = timeToSlot(entry.end);
+                      const isSelected = selectedTimelineEntries.some((item) => item.id === entry.id);
 
-                        {columnEntries.map((entry) => {
-                          const start = timeToSlot(entry.start);
-                          const end = timeToSlot(entry.end);
-                          const isSelected = selectedTimelineEntries.some((item) => item.id === entry.id);
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          onClick={() => toggleTimelineEntry(entry)}
+                          className={`absolute rounded-xl bg-emerald-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
+                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
+                          }`}
+                          style={{
+                            left: `calc(${entry.lane} * 20% + 2px)`,
+                            width: "calc(20% - 4px)",
+                            top: `${start * 20}px`,
+                            height: `${(end - start) * 20}px`,
+                          }}
+                          title={`${entry.nickname} ${entry.start}-${entry.end}`}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="-rotate-90 whitespace-nowrap leading-none text-[10px]">
+                              {entry.nickname}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                          return (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              onClick={() => toggleTimelineEntry(entry)}
-                              className={`absolute rounded-xl py-2 text-center text-[11px] font-semibold text-white shadow transition ${
-                                isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
-                              } ${barColor}`}
-                              style={{
-                                left: `calc(${entry.lane} * 20% + 2px)`,
-                                width: "calc(20% - 4px)",
-                                top: `${start * 20}px`,
-                                height: `${(end - start) * 20}px`,
-                              }}
-                              title={`${entry.nickname} ${entry.start}-${entry.end}`}
-                            >
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="-rotate-90 whitespace-nowrap leading-none text-[10px]">
-                                  {entry.nickname}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                  {/* 가운데 시간축 - 2탁 선택 시만 하이라이트 */}
+                  <div className="relative h-[960px]">
+                    {timeOptions.map((time, i) => {
+                      const active = centerAxisHighlight
+                        ? isSlotInRange(i, centerAxisHighlight.startSlot, centerAxisHighlight.endSlot)
+                        : false;
+
+                      return (
+                        <div
+                          key={`center-${time}`}
+                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-center text-[10px]"
+                          style={{ top: `${i * 20}px` }}
+                        >
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 ${
+                              active
+                                ? "bg-amber-200/90 font-semibold text-amber-900"
+                                : "text-slate-300"
+                            }`}
+                          >
+                            {time}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 2탁 */}
+                  <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
+                    {timeOptions.map((_, i) => (
+                      <div
+                        key={`line-2-${i}`}
+                        className="absolute left-0 right-0 border-t border-slate-200"
+                        style={{ top: `${i * 20}px` }}
+                      />
+                    ))}
+
+                    {timelineByTable["2탁"].map((entry) => {
+                      const start = timeToSlot(entry.start);
+                      const end = timeToSlot(entry.end);
+                      const isSelected = selectedTimelineEntries.some((item) => item.id === entry.id);
+
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          onClick={() => toggleTimelineEntry(entry)}
+                          className={`absolute rounded-xl bg-indigo-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
+                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
+                          }`}
+                          style={{
+                            left: `calc(${entry.lane} * 20% + 2px)`,
+                            width: "calc(20% - 4px)",
+                            top: `${start * 20}px`,
+                            height: `${(end - start) * 20}px`,
+                          }}
+                          title={`${entry.nickname} ${entry.start}-${entry.end}`}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="-rotate-90 whitespace-nowrap leading-none text-[10px]">
+                              {entry.nickname}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
