@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const SCRIPT_URL =
-  "여기에_네_앱스스크립트_webapp_exec_URL_붙여넣기";
+  "https://script.google.com/macros/s/AKfycbyeZXXCckoEbDLst02Atezw4yxgkLHQpCi_AKODk7WIHgM19QSTu7mUg5gK_Hw2MUZKYQ/exec";
 
 export async function GET(req: NextRequest) {
   try {
