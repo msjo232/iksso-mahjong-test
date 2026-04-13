@@ -25,11 +25,11 @@ type Entry = {
   createdAt?: string;
 };
 
-type DailyMemo = {
+type MemoItem = {
   id: string;
   date: string;
   nickname: string;
-  memo: string;
+  content: string;
   createdAt?: string;
 };
 
@@ -45,9 +45,9 @@ type SchedulesResponse = {
   message?: string;
 };
 
-type DailyMemosResponse = {
+type MemosResponse = {
   success: boolean;
-  memos: DailyMemo[];
+  memos: MemoItem[];
   message?: string;
 };
 
@@ -195,7 +195,7 @@ export default function Page() {
   const [currentUser, setCurrentUser] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [dailyMemos, setDailyMemos] = useState<DailyMemo[]>([]);
+  const [memos, setMemos] = useState<MemoItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
@@ -203,9 +203,9 @@ export default function Page() {
 
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
-  const [loadingDailyMemos, setLoadingDailyMemos] = useState(true);
+  const [loadingMemos, setLoadingMemos] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingDailyMemo, setSavingDailyMemo] = useState(false);
+  const [savingMemo, setSavingMemo] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [nicknameQuery, setNicknameQuery] = useState("");
@@ -215,8 +215,10 @@ export default function Page() {
   const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
   const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
-  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>([]);
-  const [quickMemoText, setQuickMemoText] = useState("");
+  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>(
+    []
+  );
+  const [memoInput, setMemoInput] = useState("");
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
   const currentUserBoxRef = useRef<HTMLDivElement | null>(null);
@@ -237,18 +239,12 @@ export default function Page() {
 
   useEffect(() => {
     if (!messageText) return;
-
-    const timer = window.setTimeout(() => {
-      setMessageText("");
-    }, 2000);
-
+    const timer = window.setTimeout(() => setMessageText(""), 2000);
     return () => window.clearTimeout(timer);
   }, [messageText]);
 
   async function loadMembers() {
     setLoadingMembers(true);
-    setMessageText("");
-
     try {
       const res = await fetch("/api/mahjong?action=members", {
         cache: "no-store",
@@ -277,7 +273,6 @@ export default function Page() {
 
   async function loadSchedules(date: string) {
     setLoadingSchedules(true);
-    setMessageText("");
 
     try {
       const res = await fetch(
@@ -313,33 +308,33 @@ export default function Page() {
     }
   }
 
-  async function loadDailyMemos(date: string) {
-    setLoadingDailyMemos(true);
+  async function loadMemos(date: string) {
+    setLoadingMemos(true);
 
     try {
       const res = await fetch(
-        `/api/mahjong?action=dailyMemos&date=${encodeURIComponent(date)}`,
+        `/api/mahjong?action=memos&date=${encodeURIComponent(date)}`,
         {
           cache: "no-store",
         }
       );
-      const data: DailyMemosResponse = await res.json();
+      const data: MemosResponse = await res.json();
 
       if (!data.success) {
-        throw new Error(data.message || "추가 메모를 불러오지 못했습니다.");
+        throw new Error(data.message || "메모 데이터를 불러오지 못했습니다.");
       }
 
-      setDailyMemos(data.memos);
+      setMemos(data.memos);
     } catch (error) {
       showToast(
         error instanceof Error
           ? error.message
-          : "추가 메모를 불러오는 중 오류가 발생했습니다.",
+          : "메모 데이터를 불러오는 중 오류가 발생했습니다.",
         "error"
       );
-      setDailyMemos([]);
+      setMemos([]);
     } finally {
-      setLoadingDailyMemos(false);
+      setLoadingMemos(false);
     }
   }
 
@@ -349,7 +344,7 @@ export default function Page() {
 
   useEffect(() => {
     loadSchedules(selectedDate);
-    loadDailyMemos(selectedDate);
+    loadMemos(selectedDate);
     setForm((prev) => ({ ...prev, date: selectedDate }));
   }, [selectedDate]);
 
@@ -389,9 +384,7 @@ export default function Page() {
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [currentUser, hasSelectedCurrentUser]);
 
   const dayEntries = useMemo(() => {
@@ -399,20 +392,14 @@ export default function Page() {
   }, [entries, selectedDate]);
 
   const filteredMembers = useMemo(() => {
-    if (!nicknameQuery.trim()) {
-      return members.slice(0, 8);
-    }
-
+    if (!nicknameQuery.trim()) return members.slice(0, 8);
     return members
       .filter((member) => matchesNickname(nicknameQuery, member.nickname))
       .slice(0, 8);
   }, [members, nicknameQuery]);
 
   const filteredCurrentUsers = useMemo(() => {
-    if (!currentUserQuery.trim()) {
-      return members.slice(0, 8);
-    }
-
+    if (!currentUserQuery.trim()) return members.slice(0, 8);
     return members
       .filter((member) => matchesNickname(currentUserQuery, member.nickname))
       .slice(0, 8);
@@ -424,9 +411,7 @@ export default function Page() {
     dayEntries.forEach((entry) => {
       const start = timeToSlot(entry.start);
       const end = timeToSlot(entry.end);
-      for (let s = start; s < end; s += 1) {
-        counts[s].count += 1;
-      }
+      for (let s = start; s < end; s += 1) counts[s].count += 1;
     });
 
     const result: Array<{ start: string; end: string; count: number }> = [];
@@ -435,9 +420,7 @@ export default function Page() {
     for (let i = 0; i < counts.length; i += 1) {
       const active = counts[i].count >= 4;
 
-      if (active && rangeStart === null) {
-        rangeStart = i;
-      }
+      if (active && rangeStart === null) rangeStart = i;
 
       if ((!active || i === counts.length - 1) && rangeStart !== null) {
         const endSlot = active && i === counts.length - 1 ? i + 1 : i;
@@ -465,9 +448,7 @@ export default function Page() {
           return slot >= start && slot < end;
         }).length;
 
-        if (count > maxOverlap) {
-          maxOverlap = count;
-        }
+        if (count > maxOverlap) maxOverlap = count;
       }
 
       return {
@@ -497,9 +478,7 @@ export default function Page() {
   }, [entries, currentUser]);
 
   const selectedTimelineInfo = useMemo(() => {
-    if (selectedTimelineEntries.length !== 4) {
-      return null;
-    }
+    if (selectedTimelineEntries.length !== 4) return null;
 
     const table = selectedTimelineEntries[0].table;
     const allSameTable = selectedTimelineEntries.every((entry) => entry.table === table);
@@ -516,8 +495,12 @@ export default function Page() {
       };
     }
 
-    const startSlot = Math.max(...selectedTimelineEntries.map((entry) => timeToSlot(entry.start)));
-    const endSlot = Math.min(...selectedTimelineEntries.map((entry) => timeToSlot(entry.end)));
+    const startSlot = Math.max(
+      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.start))
+    );
+    const endSlot = Math.min(
+      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.end))
+    );
 
     if (startSlot >= endSlot) {
       return {
@@ -560,32 +543,6 @@ export default function Page() {
     };
   }, [selectedTimelineInfo]);
 
-  const scheduleMemos = useMemo(() => {
-    return dayEntries
-      .filter((entry) => entry.memo.trim())
-      .map((entry) => ({
-        id: `schedule-${entry.id}`,
-        nickname: entry.nickname,
-        memo: entry.memo,
-        createdAt: entry.createdAt,
-        source: "일정",
-      }));
-  }, [dayEntries]);
-
-  const extraMemos = useMemo(() => {
-    return dailyMemos.map((memo) => ({
-      id: `daily-${memo.id}`,
-      nickname: memo.nickname,
-      memo: memo.memo,
-      createdAt: memo.createdAt,
-      source: "추가",
-    }));
-  }, [dailyMemos]);
-
-  const allVisibleMemos = useMemo(() => {
-    return [...scheduleMemos, ...extraMemos];
-  }, [scheduleMemos, extraMemos]);
-
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
 
@@ -610,26 +567,25 @@ ${memberLines}
     }
 
     try {
-      const text = buildSelectedGroupMessage();
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(buildSelectedGroupMessage());
       showToast("복사되었습니다.", "success");
     } catch {
       showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
     }
   }
 
-  async function saveQuickMemo() {
+  async function saveMemo() {
     if (!currentUser) {
-      showToast("우측 상단 회원검색에서 닉네임을 먼저 선택해주세요.", "warning");
+      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
       return;
     }
 
-    if (!quickMemoText.trim()) {
+    if (!memoInput.trim()) {
       showToast("메모 내용을 입력해주세요.", "warning");
       return;
     }
 
-    setSavingDailyMemo(true);
+    setSavingMemo(true);
 
     try {
       const res = await fetch("/api/mahjong", {
@@ -641,7 +597,7 @@ ${memberLines}
           action: "saveMemo",
           date: selectedDate,
           nickname: currentUser,
-          memo: quickMemoText.trim(),
+          content: memoInput.trim(),
         }),
       });
 
@@ -651,16 +607,16 @@ ${memberLines}
         throw new Error(data.message || "메모 저장에 실패했습니다.");
       }
 
-      setQuickMemoText("");
-      await loadDailyMemos(selectedDate);
+      setMemoInput("");
       showToast("메모가 저장되었습니다.", "success");
+      await loadMemos(selectedDate);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "메모 저장 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
-      setSavingDailyMemo(false);
+      setSavingMemo(false);
     }
   }
 
@@ -692,9 +648,7 @@ ${memberLines}
         return prev.filter((item) => item.id !== entry.id);
       }
 
-      if (prev.length === 0) {
-        return [entry];
-      }
+      if (prev.length === 0) return [entry];
 
       const selectedTable = prev[0].table;
       if (selectedTable !== entry.table) {
@@ -728,17 +682,18 @@ ${memberLines}
       if (item.table !== form.table) return false;
       if (item.date !== form.date) return false;
       if (editingId && item.id === editingId) return false;
-
       return overlaps(item.start, item.end, form.start, form.end);
     }).length;
 
     if (overlappingCount >= 5) {
-      showToast(`${form.table}은 해당 시간대에 이미 최대 5명입니다. 탁이 다 찼습니다.`, "warning");
+      showToast(
+        `${form.table}은 해당 시간대에 이미 최대 5명입니다. 탁이 다 찼습니다.`,
+        "warning"
+      );
       return;
     }
 
     setSaving(true);
-    setMessageText("");
 
     try {
       const res = await fetch("/api/mahjong", {
@@ -811,7 +766,6 @@ ${memberLines}
   }
 
   async function deleteEntry(id: string) {
-    setMessageText("");
     setDeletingId(id);
 
     try {
@@ -889,8 +843,8 @@ ${memberLines}
                   hasSelectedCurrentUser
                     ? currentUserQuery
                     : showCurrentUserSuggestions
-                    ? currentUserQuery
-                    : ""
+                      ? currentUserQuery
+                      : ""
                 }
                 onChange={(e) => {
                   const value = e.target.value;
@@ -908,34 +862,36 @@ ${memberLines}
                 className="w-full rounded-xl border px-3 py-2 text-sm"
               />
 
-              {showCurrentUserSuggestions && filteredCurrentUsers.length > 0 && !loadingMembers && (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-60 overflow-y-auto rounded-2xl border bg-white shadow-lg">
-                  {filteredCurrentUsers.map((user) => (
-                    <button
-                      key={user.nickname}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setCurrentUser(user.nickname);
-                        setCurrentUserQuery(user.nickname);
-                        setHasSelectedCurrentUser(true);
-                        setShowCurrentUserSuggestions(false);
-                        setForm((prev) => ({
-                          ...prev,
-                          nickname: user.nickname,
-                        }));
-                        setNicknameQuery(user.nickname);
-                      }}
-                      className="block w-full border-b px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
-                    >
-                      <div className="font-medium">{user.nickname}</div>
-                      {user.name && (
-                        <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {showCurrentUserSuggestions &&
+                filteredCurrentUsers.length > 0 &&
+                !loadingMembers && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-60 overflow-y-auto rounded-2xl border bg-white shadow-lg">
+                    {filteredCurrentUsers.map((user) => (
+                      <button
+                        key={user.nickname}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setCurrentUser(user.nickname);
+                          setCurrentUserQuery(user.nickname);
+                          setHasSelectedCurrentUser(true);
+                          setShowCurrentUserSuggestions(false);
+                          setForm((prev) => ({
+                            ...prev,
+                            nickname: user.nickname,
+                          }));
+                          setNicknameQuery(user.nickname);
+                        }}
+                        className="block w-full border-b px-4 py-3 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                      >
+                        <div className="font-medium">{user.nickname}</div>
+                        {user.name && (
+                          <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
               {showCurrentUserSuggestions &&
                 currentUserQuery.trim() &&
@@ -953,7 +909,7 @@ ${memberLines}
           {tab === "timeline" && (
             <div className="space-y-3 p-3">
               <div className="rounded-3xl border bg-slate-50 p-4">
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">메모</h2>
                   <span className="text-xs text-slate-400">
                     선택 닉네임: {currentUser || "없음"}
@@ -965,34 +921,60 @@ ${memberLines}
                 </div>
 
                 <div className="space-y-2">
-                  {loadingSchedules || loadingDailyMemos ? (
+                  {loadingMemos ? (
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
                       메모를 불러오는 중입니다.
                     </div>
-                  ) : allVisibleMemos.length === 0 ? (
+                  ) : memos.length === 0 && dayEntries.filter((v) => v.memo.trim()).length === 0 ? (
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
                       아직 등록된 메모가 없습니다.
                     </div>
                   ) : (
-                    allVisibleMemos.map((item) => (
-                      <div key={item.id} className="rounded-2xl bg-white px-3 py-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-slate-800">
-                            {item.nickname}
+                    <>
+                      {dayEntries
+                        .filter((entry) => entry.memo.trim())
+                        .map((entry) => (
+                          <div
+                            key={`entry-memo-${entry.id}`}
+                            className="rounded-2xl bg-white px-3 py-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold text-slate-800">
+                                {entry.nickname}
+                              </div>
+                              <div className="text-[11px] text-slate-400">시간입력 메모</div>
+                            </div>
+                            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
+                              {entry.memo}
+                            </div>
                           </div>
-                          <div className="text-[11px] text-slate-400">{item.source}</div>
+                        ))}
+
+                      {memos.map((memo) => (
+                        <div key={memo.id} className="rounded-2xl bg-white px-3 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-800">
+                              {memo.nickname}
+                            </div>
+                            <div className="text-[11px] text-slate-400">추가 메모</div>
+                          </div>
+                          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
+                            {memo.content}
+                          </div>
+                          {memo.createdAt && (
+                            <div className="mt-2 text-xs text-slate-400">{memo.createdAt}</div>
+                          )}
                         </div>
-                        <div className="mt-1 text-sm text-slate-600">{item.memo}</div>
-                      </div>
-                    ))
+                      ))}
+                    </>
                   )}
                 </div>
 
-                <div className="mt-4 rounded-2xl bg-white p-3">
-                  <div className="mb-2 text-sm font-semibold text-slate-800">추가 메모 작성</div>
+                <div className="mt-3 rounded-2xl bg-white p-3">
+                  <div className="mb-2 text-sm font-medium text-slate-700">추가 메모 작성</div>
                   <textarea
-                    value={quickMemoText}
-                    onChange={(e) => setQuickMemoText(e.target.value)}
+                    value={memoInput}
+                    onChange={(e) => setMemoInput(e.target.value)}
                     rows={3}
                     placeholder={
                       currentUser
@@ -1007,11 +989,11 @@ ${memberLines}
                     </div>
                     <button
                       type="button"
-                      onClick={saveQuickMemo}
-                      disabled={savingDailyMemo}
+                      onClick={saveMemo}
+                      disabled={savingMemo}
                       className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      {savingDailyMemo ? "저장 중..." : "메모 저장"}
+                      {savingMemo ? "메모 저장 중..." : "메모 저장"}
                     </button>
                   </div>
                 </div>
@@ -1040,7 +1022,8 @@ ${memberLines}
                               공통 가능 시간
                             </div>
                             <div className="mt-1 text-sm text-slate-700">
-                              {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~ {selectedTimelineInfo.end}
+                              {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~{" "}
+                              {selectedTimelineInfo.end}
                             </div>
                             <div className="mt-3 grid grid-cols-2 gap-2">
                               <button
@@ -1124,7 +1107,9 @@ ${memberLines}
                     {timelineByTable["1탁"].map((entry) => {
                       const start = timeToSlot(entry.start);
                       const end = timeToSlot(entry.end);
-                      const isSelected = selectedTimelineEntries.some((item) => item.id === entry.id);
+                      const isSelected = selectedTimelineEntries.some(
+                        (item) => item.id === entry.id
+                      );
 
                       return (
                         <button
@@ -1190,7 +1175,9 @@ ${memberLines}
                     {timelineByTable["2탁"].map((entry) => {
                       const start = timeToSlot(entry.start);
                       const end = timeToSlot(entry.end);
-                      const isSelected = selectedTimelineEntries.some((item) => item.id === entry.id);
+                      const isSelected = selectedTimelineEntries.some(
+                        (item) => item.id === entry.id
+                      );
 
                       return (
                         <button
@@ -1232,7 +1219,9 @@ ${memberLines}
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
                   <div className="relative" ref={nicknameBoxRef}>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">닉네임</label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      닉네임
+                    </label>
                     <input
                       type="text"
                       value={nicknameQuery}
@@ -1291,7 +1280,9 @@ ${memberLines}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">시작시간</label>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        시작시간
+                      </label>
                       <select
                         value={form.start}
                         onChange={(e) => setForm((prev) => ({ ...prev, start: e.target.value }))}
@@ -1306,7 +1297,9 @@ ${memberLines}
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">종료시간</label>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        종료시간
+                      </label>
                       <select
                         value={form.end}
                         onChange={(e) => setForm((prev) => ({ ...prev, end: e.target.value }))}
@@ -1322,7 +1315,9 @@ ${memberLines}
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">희망탁</label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      희망탁
+                    </label>
                     <select
                       value={form.table}
                       onChange={(e) =>
@@ -1390,12 +1385,16 @@ ${memberLines}
                     <div key={item.id} className="rounded-3xl border bg-white p-4 shadow-sm">
                       <div className="flex flex-col gap-3">
                         <div>
-                          <div className="text-base font-semibold text-slate-800">{item.date}</div>
+                          <div className="text-base font-semibold text-slate-800">
+                            {item.date}
+                          </div>
                           <div className="mt-1 text-sm text-slate-600">
                             {item.start} ~ {item.end} · {item.table}
                           </div>
                           {item.memo && (
-                            <div className="mt-2 text-sm text-slate-500">메모: {item.memo}</div>
+                            <div className="mt-2 text-sm text-slate-500">
+                              메모: {item.memo}
+                            </div>
                           )}
                         </div>
 
