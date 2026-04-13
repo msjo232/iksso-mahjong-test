@@ -598,7 +598,15 @@ ${memberLines}
     }
   }
 
-  async function deleteMemo(id: string) {
+  async function deleteMemo(id: string, nickname: string) {
+    if (nickname !== currentUser) {
+      showToast("선택한 닉네임의 메모만 삭제할 수 있습니다.", "warning");
+      return;
+    }
+
+    const ok = window.confirm("삭제하시겠습니까?");
+    if (!ok) return;
+
     setDeletingMemoId(id);
 
     try {
@@ -941,33 +949,47 @@ ${memberLines}
                       아직 등록된 메모가 없습니다.
                     </div>
                   ) : (
-                    mergedMemos.map((item) => (
-                      <div key={item.id} className="rounded-2xl bg-white px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-800">
-                            {item.nickname}
-                          </div>
-                          <div className="shrink-0 text-[11px] text-slate-400">
-                            {formatMemoDateTime(item.createdAt)}
-                          </div>
-                        </div>
+                    mergedMemos.map((item) => {
+                      const canDelete = item.nickname === currentUser;
 
-                        <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
-                          {item.content}
-                        </div>
+                      return (
+                        <div key={item.id} className="rounded-2xl bg-white px-3 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-semibold text-slate-800">
+                                {item.nickname}
+                              </div>
 
-                        <div className="mt-3 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => deleteMemo(item.id)}
-                            disabled={deletingMemoId !== null}
-                            className="rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 disabled:opacity-50"
-                          >
-                            {deletingMemoId === item.id ? "삭제중..." : "삭제"}
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteMemo(item.id, item.nickname)}
+                                disabled={deletingMemoId !== null || !canDelete}
+                                className={
+                                  canDelete
+                                    ? "rounded-md bg-rose-50 px-1.5 py-0.5 text-[11px] font-bold text-rose-700 disabled:opacity-50"
+                                    : "cursor-not-allowed rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-300"
+                                }
+                                title={
+                                  canDelete
+                                    ? "메모 삭제"
+                                    : "선택한 닉네임의 메모만 삭제할 수 있습니다."
+                                }
+                              >
+                                {deletingMemoId === item.id ? "..." : "×"}
+                              </button>
+                            </div>
+
+                            <div className="shrink-0 text-[11px] text-slate-400">
+                              {formatMemoDateTime(item.createdAt)}
+                            </div>
+                          </div>
+
+                          <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                            {item.content}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
