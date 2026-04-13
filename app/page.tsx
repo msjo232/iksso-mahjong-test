@@ -1524,7 +1524,7 @@ ${needed}인 모집중입니다.
         </main>
 
         {selectedTimelineEntries.length > 0 && (
-          <div className="fixed inset-x-0 bottom-20 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
+          <div className="fixed inset-x-0 top-20 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
             <div
               className="rounded-3xl border bg-white p-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
