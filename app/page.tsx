@@ -61,6 +61,13 @@ type TimelineEntry = Entry & {
   lane: number;
 };
 
+type UnifiedMemo = {
+  id: string;
+  nickname: string;
+  content: string;
+  createdAt?: string;
+};
+
 function getToday() {
   const now = new Date();
   const year = now.getFullYear();
@@ -187,6 +194,23 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
 
 function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
   return slot >= startSlot && slot <= endSlot;
+}
+
+function formatMemoDateTime(value?: string) {
+  if (!value) return "";
+
+  const date = new Date(value.replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+
+  return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
 export default function Page() {
@@ -405,60 +429,6 @@ export default function Page() {
       .slice(0, 8);
   }, [members, currentUserQuery]);
 
-  const overlapSummary = useMemo(() => {
-    const counts = Array.from({ length: 48 }, (_, slot) => ({ slot, count: 0 }));
-
-    dayEntries.forEach((entry) => {
-      const start = timeToSlot(entry.start);
-      const end = timeToSlot(entry.end);
-      for (let s = start; s < end; s += 1) counts[s].count += 1;
-    });
-
-    const result: Array<{ start: string; end: string; count: number }> = [];
-    let rangeStart: number | null = null;
-
-    for (let i = 0; i < counts.length; i += 1) {
-      const active = counts[i].count >= 4;
-
-      if (active && rangeStart === null) rangeStart = i;
-
-      if ((!active || i === counts.length - 1) && rangeStart !== null) {
-        const endSlot = active && i === counts.length - 1 ? i + 1 : i;
-        result.push({
-          start: slotToTime(rangeStart),
-          end: slotToTime(endSlot),
-          count: Math.max(...counts.slice(rangeStart, endSlot).map((v) => v.count)),
-        });
-        rangeStart = null;
-      }
-    }
-
-    return result;
-  }, [dayEntries]);
-
-  const tableWarnings = useMemo(() => {
-    return (["1탁", "2탁"] as TableType[]).map((table) => {
-      const tableEntries = dayEntries.filter((entry) => entry.table === table);
-      let maxOverlap = 0;
-
-      for (let slot = 0; slot < 48; slot += 1) {
-        const count = tableEntries.filter((entry) => {
-          const start = timeToSlot(entry.start);
-          const end = timeToSlot(entry.end);
-          return slot >= start && slot < end;
-        }).length;
-
-        if (count > maxOverlap) maxOverlap = count;
-      }
-
-      return {
-        table,
-        maxOverlap,
-        full: maxOverlap >= 5,
-      };
-    });
-  }, [dayEntries]);
-
   const timelineByTable = useMemo(() => {
     return {
       "1탁": assignLanes(dayEntries.filter((entry) => entry.table === "1탁")),
@@ -542,6 +512,35 @@ export default function Page() {
       endSlot: selectedTimelineInfo.endSlot,
     };
   }, [selectedTimelineInfo]);
+
+  const mergedMemos = useMemo<UnifiedMemo[]>(() => {
+    const scheduleMemos: UnifiedMemo[] = dayEntries
+      .filter((entry) => entry.memo.trim())
+      .map((entry) => ({
+        id: `schedule-${entry.id}`,
+        nickname: entry.nickname,
+        content: entry.memo,
+        createdAt: entry.createdAt,
+      }));
+
+    const extraMemos: UnifiedMemo[] = memos.map((memo) => ({
+      id: `memo-${memo.id}`,
+      nickname: memo.nickname,
+      content: memo.content,
+      createdAt: memo.createdAt,
+    }));
+
+    return [...scheduleMemos, ...extraMemos].sort((a, b) => {
+      const aTime = new Date((a.createdAt || "").replace(" ", "T")).getTime();
+      const bTime = new Date((b.createdAt || "").replace(" ", "T")).getTime();
+
+      if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+      if (Number.isNaN(aTime)) return 1;
+      if (Number.isNaN(bTime)) return -1;
+
+      return aTime - bTime;
+    });
+  }, [dayEntries, memos]);
 
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
@@ -843,8 +842,8 @@ ${memberLines}
                   hasSelectedCurrentUser
                     ? currentUserQuery
                     : showCurrentUserSuggestions
-                      ? currentUserQuery
-                      : ""
+                    ? currentUserQuery
+                    : ""
                 }
                 onChange={(e) => {
                   const value = e.target.value;
@@ -925,48 +924,27 @@ ${memberLines}
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
                       메모를 불러오는 중입니다.
                     </div>
-                  ) : memos.length === 0 && dayEntries.filter((v) => v.memo.trim()).length === 0 ? (
+                  ) : mergedMemos.length === 0 ? (
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
                       아직 등록된 메모가 없습니다.
                     </div>
                   ) : (
-                    <>
-                      {dayEntries
-                        .filter((entry) => entry.memo.trim())
-                        .map((entry) => (
-                          <div
-                            key={`entry-memo-${entry.id}`}
-                            className="rounded-2xl bg-white px-3 py-3"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold text-slate-800">
-                                {entry.nickname}
-                              </div>
-                              <div className="text-[11px] text-slate-400">시간입력 메모</div>
-                            </div>
-                            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
-                              {entry.memo}
-                            </div>
+                    mergedMemos.map((item) => (
+                      <div key={item.id} className="rounded-2xl bg-white px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm font-semibold text-slate-800">
+                            {item.nickname}
                           </div>
-                        ))}
-
-                      {memos.map((memo) => (
-                        <div key={memo.id} className="rounded-2xl bg-white px-3 py-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-slate-800">
-                              {memo.nickname}
-                            </div>
-                            <div className="text-[11px] text-slate-400">추가 메모</div>
+                          <div className="shrink-0 text-[11px] text-slate-400">
+                            {formatMemoDateTime(item.createdAt)}
                           </div>
-                          <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
-                            {memo.content}
-                          </div>
-                          {memo.createdAt && (
-                            <div className="mt-2 text-xs text-slate-400">{memo.createdAt}</div>
-                          )}
                         </div>
-                      ))}
-                    </>
+
+                        <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
+                          {item.content}
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
 
