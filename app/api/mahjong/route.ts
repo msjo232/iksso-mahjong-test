@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbxEKB0T1qAYOoGFBomof5i16G1BBEvpQ6Y6rFEBz-akKhHVyvR_MUMXmCkx33kub8BAcw/exec";
-   
 
 export async function GET(req: NextRequest) {
   try {
