@@ -31,6 +31,8 @@ type MemoItem = {
   nickname: string;
   content: string;
   createdAt?: string;
+  sourceType?: string;
+  scheduleId?: string;
 };
 
 type MembersResponse = {
@@ -59,13 +61,6 @@ type SaveResponse = {
 
 type TimelineEntry = Entry & {
   lane: number;
-};
-
-type UnifiedMemo = {
-  id: string;
-  nickname: string;
-  content: string;
-  createdAt?: string;
 };
 
 function getToday() {
@@ -231,6 +226,7 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
   const [savingMemo, setSavingMemo] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingMemoId, setDeletingMemoId] = useState<string | null>(null);
 
   const [nicknameQuery, setNicknameQuery] = useState("");
   const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
@@ -239,9 +235,7 @@ export default function Page() {
   const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
   const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
-  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>(
-    []
-  );
+  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>([]);
   const [memoInput, setMemoInput] = useState("");
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
@@ -269,6 +263,7 @@ export default function Page() {
 
   async function loadMembers() {
     setLoadingMembers(true);
+
     try {
       const res = await fetch("/api/mahjong?action=members", {
         cache: "no-store",
@@ -513,24 +508,8 @@ export default function Page() {
     };
   }, [selectedTimelineInfo]);
 
-  const mergedMemos = useMemo<UnifiedMemo[]>(() => {
-    const scheduleMemos: UnifiedMemo[] = dayEntries
-      .filter((entry) => entry.memo.trim())
-      .map((entry) => ({
-        id: `schedule-${entry.id}`,
-        nickname: entry.nickname,
-        content: entry.memo,
-        createdAt: entry.createdAt,
-      }));
-
-    const extraMemos: UnifiedMemo[] = memos.map((memo) => ({
-      id: `memo-${memo.id}`,
-      nickname: memo.nickname,
-      content: memo.content,
-      createdAt: memo.createdAt,
-    }));
-
-    return [...scheduleMemos, ...extraMemos].sort((a, b) => {
+  const mergedMemos = useMemo(() => {
+    return [...memos].sort((a, b) => {
       const aTime = new Date((a.createdAt || "").replace(" ", "T")).getTime();
       const bTime = new Date((b.createdAt || "").replace(" ", "T")).getTime();
 
@@ -540,7 +519,7 @@ export default function Page() {
 
       return aTime - bTime;
     });
-  }, [dayEntries, memos]);
+  }, [memos]);
 
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
@@ -616,6 +595,39 @@ ${memberLines}
       );
     } finally {
       setSavingMemo(false);
+    }
+  }
+
+  async function deleteMemo(id: string) {
+    setDeletingMemoId(id);
+
+    try {
+      const res = await fetch("/api/mahjong", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "deleteMemo",
+          id,
+        }),
+      });
+
+      const data: SaveResponse = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "메모 삭제에 실패했습니다.");
+      }
+
+      showToast("메모가 삭제되었습니다.", "success");
+      await loadMemos(selectedDate);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "메모 삭제 중 오류가 발생했습니다.",
+        "error"
+      );
+    } finally {
+      setDeletingMemoId(null);
     }
   }
 
@@ -726,7 +738,7 @@ ${memberLines}
       setTab("my");
       setEditingId(null);
 
-      await loadSchedules(form.date);
+      await Promise.all([loadSchedules(form.date), loadMemos(form.date)]);
 
       setForm({
         nickname: form.nickname,
@@ -916,7 +928,7 @@ ${memberLines}
                 </div>
 
                 <div className="mb-3 text-sm text-slate-500">
-                  시간입력 시 적은 메모와 추가 메모가 함께 표시됩니다.
+                  일정 삭제와 별개로 메모는 따로 보관됩니다.
                 </div>
 
                 <div className="space-y-2">
@@ -942,6 +954,17 @@ ${memberLines}
 
                         <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
                           {item.content}
+                        </div>
+
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => deleteMemo(item.id)}
+                            disabled={deletingMemoId !== null}
+                            className="rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                          >
+                            {deletingMemoId === item.id ? "삭제중..." : "삭제"}
+                          </button>
                         </div>
                       </div>
                     ))
