@@ -133,11 +133,7 @@ function matchesNickname(query: string, nickname: string) {
 function timeToSlot(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   let slot = hour * 2 + (minute === 30 ? 1 : 0);
-
-  if (slot < 12) {
-    slot += 48;
-  }
-
+  if (slot < 12) slot += 48;
   return slot - 12;
 }
 
@@ -153,7 +149,6 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   const aE = timeToSlot(aEnd);
   const bS = timeToSlot(bStart);
   const bE = timeToSlot(bEnd);
-
   return aS < bE && aE > bS;
 }
 
@@ -171,7 +166,6 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
     const endSlot = timeToSlot(entry.end);
 
     let assignedLane = 0;
-
     for (let i = 0; i < 5; i += 1) {
       if (startSlot >= laneEndSlots[i]) {
         assignedLane = i;
@@ -193,11 +187,8 @@ function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
 
 function formatMemoDateTime(value?: string) {
   if (!value) return "";
-
   const date = new Date(value.replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -229,17 +220,13 @@ export default function Page() {
   const [deletingMemoId, setDeletingMemoId] = useState<string | null>(null);
 
   const [nicknameQuery, setNicknameQuery] = useState("");
-  const [showNicknameSuggestions, setShowNicknameSuggestions] =
-    useState(false);
+  const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
 
   const [currentUserQuery, setCurrentUserQuery] = useState("");
-  const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] =
-    useState(false);
+  const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
   const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
-  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<
-    Entry[]
-  >([]);
+  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>([]);
   const [memoInput, setMemoInput] = useState("");
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
@@ -267,7 +254,6 @@ export default function Page() {
 
   async function loadMembers() {
     setLoadingMembers(true);
-
     try {
       const res = await fetch("/api/mahjong?action=members", {
         cache: "no-store",
@@ -284,9 +270,7 @@ export default function Page() {
       setHasSelectedCurrentUser(false);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "회원 목록을 불러오는 중 오류가 발생했습니다.",
+        error instanceof Error ? error.message : "회원 목록을 불러오는 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
@@ -296,13 +280,10 @@ export default function Page() {
 
   async function loadSchedules(date: string) {
     setLoadingSchedules(true);
-
     try {
       const res = await fetch(
         `/api/mahjong?action=schedules&date=${encodeURIComponent(date)}`,
-        {
-          cache: "no-store",
-        }
+        { cache: "no-store" }
       );
       const data: SchedulesResponse = await res.json();
 
@@ -316,16 +297,12 @@ export default function Page() {
       }));
 
       setEntries(normalized);
-      setSelectedTimelineEntries([]);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "일정 데이터를 불러오는 중 오류가 발생했습니다.",
+        error instanceof Error ? error.message : "일정 데이터를 불러오는 중 오류가 발생했습니다.",
         "error"
       );
       setEntries([]);
-      setSelectedTimelineEntries([]);
     } finally {
       setLoadingSchedules(false);
     }
@@ -333,13 +310,10 @@ export default function Page() {
 
   async function loadMemos(date: string) {
     setLoadingMemos(true);
-
     try {
       const res = await fetch(
         `/api/mahjong?action=memos&date=${encodeURIComponent(date)}`,
-        {
-          cache: "no-store",
-        }
+        { cache: "no-store" }
       );
       const data: MemosResponse = await res.json();
 
@@ -350,9 +324,7 @@ export default function Page() {
       setMemos(data.memos);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "메모 데이터를 불러오는 중 오류가 발생했습니다.",
+        error instanceof Error ? error.message : "메모 데이터를 불러오는 중 오류가 발생했습니다.",
         "error"
       );
       setMemos([]);
@@ -369,6 +341,7 @@ export default function Page() {
     loadSchedules(selectedDate);
     loadMemos(selectedDate);
     setForm((prev) => ({ ...prev, date: selectedDate }));
+    setSelectedTimelineEntries([]);
   }, [selectedDate]);
 
   useEffect(() => {
@@ -396,10 +369,7 @@ export default function Page() {
         setShowNicknameSuggestions(false);
       }
 
-      if (
-        currentUserBoxRef.current &&
-        !currentUserBoxRef.current.contains(target)
-      ) {
+      if (currentUserBoxRef.current && !currentUserBoxRef.current.contains(target)) {
         setShowCurrentUserSuggestions(false);
         if (hasSelectedCurrentUser && currentUser) {
           setCurrentUserQuery(currentUser);
@@ -410,8 +380,7 @@ export default function Page() {
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [currentUser, hasSelectedCurrentUser]);
 
   const dayEntries = useMemo(() => {
@@ -454,9 +423,7 @@ export default function Page() {
     if (selectedTimelineEntries.length !== 4) return null;
 
     const table = selectedTimelineEntries[0].table;
-    const allSameTable = selectedTimelineEntries.every(
-      (entry) => entry.table === table
-    );
+    const allSameTable = selectedTimelineEntries.every((entry) => entry.table === table);
 
     if (!allSameTable) {
       return {
@@ -526,7 +493,6 @@ export default function Page() {
       if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
       if (Number.isNaN(aTime)) return 1;
       if (Number.isNaN(bTime)) return -1;
-
       return aTime - bTime;
     });
   }, [memos]);
@@ -534,9 +500,7 @@ export default function Page() {
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
 
-    const memberLines = selectedTimelineInfo.names
-      .map((name) => `- ${name}`)
-      .join("\n");
+    const memberLines = selectedTimelineInfo.names.map((name) => `- ${name}`).join("\n");
 
     return `🀄 익쏘 마작 모임 확정
 
@@ -569,10 +533,7 @@ ${needed}인 모집중입니다.
   }
 
   function buildMultiPromoMessage() {
-    if (
-      selectedTimelineEntries.length < 2 ||
-      selectedTimelineEntries.length >= 4
-    ) {
+    if (selectedTimelineEntries.length < 2 || selectedTimelineEntries.length >= 4) {
       return "";
     }
 
@@ -645,9 +606,7 @@ ${needed}인 모집중입니다.
     try {
       const res = await fetch("/api/mahjong", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "saveMemo",
           date: selectedDate,
@@ -667,9 +626,7 @@ ${needed}인 모집중입니다.
       await loadMemos(selectedDate);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "메모 저장 중 오류가 발생했습니다.",
+        error instanceof Error ? error.message : "메모 저장 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
@@ -691,9 +648,7 @@ ${needed}인 모집중입니다.
     try {
       const res = await fetch("/api/mahjong", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "deleteMemo",
           id,
@@ -710,9 +665,7 @@ ${needed}인 모집중입니다.
       await loadMemos(selectedDate);
     } catch (error) {
       showToast(
-        error instanceof Error
-          ? error.message
-          : "메모 삭제 중 오류가 발생했습니다.",
+        error instanceof Error ? error.message : "메모 삭제 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
@@ -798,9 +751,7 @@ ${needed}인 모집중입니다.
     try {
       const res = await fetch("/api/mahjong", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "saveSchedule",
           id: editingId || undefined,
@@ -819,10 +770,7 @@ ${needed}인 모집중입니다.
         throw new Error(data.message || "저장에 실패했습니다.");
       }
 
-      showToast(
-        editingId ? "일정을 수정했어요." : "일정을 저장했어요.",
-        "success"
-      );
+      showToast(editingId ? "일정을 수정했어요." : "일정을 저장했어요.", "success");
       setSelectedDate(form.date);
       setCurrentUser(form.nickname);
       setCurrentUserQuery(form.nickname);
@@ -874,9 +822,7 @@ ${needed}인 모집중입니다.
     try {
       const res = await fetch("/api/mahjong", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "deleteSchedule",
           id,
@@ -922,8 +868,6 @@ ${needed}인 모집중입니다.
             {messageText}
           </div>
         </div>
-      )}
-
       )}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
@@ -993,9 +937,7 @@ ${needed}인 모집중입니다.
                       >
                         <div className="font-medium">{user.nickname}</div>
                         {user.name && (
-                          <div className="mt-0.5 text-xs text-slate-400">
-                            {user.name}
-                          </div>
+                          <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
                         )}
                       </button>
                     ))}
@@ -1116,32 +1058,20 @@ ${needed}인 모집중입니다.
 
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">
-                    타임라인
-                  </h2>
-                  <span className="text-xs text-slate-400">
-                    막대를 눌러 4명 선택
-                  </span>
+                  <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
+                  <span className="text-xs text-slate-400">막대를 눌러 4명 선택</span>
                 </div>
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
                   <div />
-                  <div className="text-center text-xs font-semibold text-emerald-700">
-                    1탁
-                  </div>
+                  <div className="text-center text-xs font-semibold text-emerald-700">1탁</div>
                   <div />
-                  <div className="text-center text-xs font-semibold text-indigo-700">
-                    2탁
-                  </div>
+                  <div className="text-center text-xs font-semibold text-indigo-700">2탁</div>
 
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = leftAxisHighlight
-                        ? isSlotInRange(
-                            i,
-                            leftAxisHighlight.startSlot,
-                            leftAxisHighlight.endSlot
-                          )
+                        ? isSlotInRange(i, leftAxisHighlight.startSlot, leftAxisHighlight.endSlot)
                         : false;
 
                       return (
@@ -1186,7 +1116,7 @@ ${needed}인 모집중입니다.
                           type="button"
                           onClick={() => toggleTimelineEntry(entry)}
                           className={`absolute rounded-xl bg-emerald-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
-                            isSelected ? "scale-[1.02] ring-4 ring-yellow-300" : ""
+                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
                           }`}
                           style={{
                             left: `calc(${entry.lane} * 20% + 2px)`,
@@ -1209,11 +1139,7 @@ ${needed}인 모집중입니다.
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = centerAxisHighlight
-                        ? isSlotInRange(
-                            i,
-                            centerAxisHighlight.startSlot,
-                            centerAxisHighlight.endSlot
-                          )
+                        ? isSlotInRange(i, centerAxisHighlight.startSlot, centerAxisHighlight.endSlot)
                         : false;
 
                       return (
@@ -1258,7 +1184,7 @@ ${needed}인 모집중입니다.
                           type="button"
                           onClick={() => toggleTimelineEntry(entry)}
                           className={`absolute rounded-xl bg-indigo-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
-                            isSelected ? "scale-[1.02] ring-4 ring-yellow-300" : ""
+                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
                           }`}
                           style={{
                             left: `calc(${entry.lane} * 20% + 2px)`,
@@ -1285,12 +1211,9 @@ ${needed}인 모집중입니다.
           {tab === "input" && (
             <div className="p-3">
               <div className="rounded-3xl border bg-slate-50 p-4">
-                <h2 className="text-lg font-semibold text-slate-800">
-                  가능 시간 입력
-                </h2>
+                <h2 className="text-lg font-semibold text-slate-800">가능 시간 입력</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  원하는 날짜와 시간을 입력하세요. 하루 기준은 06:00 ~ 익일
-                  05:30입니다.
+                  원하는 날짜와 시간을 입력하세요. 하루 기준은 06:00 ~ 익일 05:30입니다.
                 </p>
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
@@ -1320,10 +1243,7 @@ ${needed}인 모집중입니다.
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setForm((prev) => ({
-                                ...prev,
-                                nickname: user.nickname,
-                              }));
+                              setForm((prev) => ({ ...prev, nickname: user.nickname }));
                               setNicknameQuery(user.nickname);
                               setShowNicknameSuggestions(false);
                             }}
@@ -1331,9 +1251,7 @@ ${needed}인 모집중입니다.
                           >
                             <div className="font-medium">{user.nickname}</div>
                             {user.name && (
-                              <div className="mt-0.5 text-xs text-slate-400">
-                                {user.name}
-                              </div>
+                              <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
                             )}
                           </button>
                         ))}
@@ -1350,15 +1268,11 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      날짜
-                    </label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">날짜</label>
                     <input
                       type="date"
                       value={form.date}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, date: e.target.value }))
-                      }
+                      onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
                     />
                   </div>
@@ -1370,9 +1284,7 @@ ${needed}인 모집중입니다.
                       </label>
                       <select
                         value={form.start}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, start: e.target.value }))
-                        }
+                        onChange={(e) => setForm((prev) => ({ ...prev, start: e.target.value }))}
                         className="w-full rounded-2xl border px-3 py-3 text-sm"
                       >
                         {timeOptions.map((time) => (
@@ -1389,9 +1301,7 @@ ${needed}인 모집중입니다.
                       </label>
                       <select
                         value={form.end}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, end: e.target.value }))
-                        }
+                        onChange={(e) => setForm((prev) => ({ ...prev, end: e.target.value }))}
                         className="w-full rounded-2xl border px-3 py-3 text-sm"
                       >
                         {timeOptions.map((time) => (
@@ -1410,10 +1320,7 @@ ${needed}인 모집중입니다.
                     <select
                       value={form.table}
                       onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          table: e.target.value as TableType,
-                        }))
+                        setForm((prev) => ({ ...prev, table: e.target.value as TableType }))
                       }
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
                     >
@@ -1423,14 +1330,10 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      메모
-                    </label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">메모</label>
                     <textarea
                       value={form.memo}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, memo: e.target.value }))
-                      }
+                      onChange={(e) => setForm((prev) => ({ ...prev, memo: e.target.value }))}
                       rows={3}
                       placeholder="예: 10분 정도 늦을 수 있음"
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
@@ -1478,10 +1381,7 @@ ${needed}인 모집중입니다.
                   </div>
                 ) : (
                   myEntries.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-3xl border bg-white p-4 shadow-sm"
-                    >
+                    <div key={item.id} className="rounded-3xl border bg-white p-4 shadow-sm">
                       <div className="flex flex-col gap-3">
                         <div>
                           <div className="text-base font-semibold text-slate-800">
@@ -1524,20 +1424,15 @@ ${needed}인 모집중입니다.
         </main>
 
         {selectedTimelineEntries.length > 0 && (
-          <div className="fixed inset-x-0 top-20 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
-            <div
-              className="rounded-3xl border bg-white p-4 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-x-0 top-24 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
+            <div className="rounded-3xl border bg-white p-4 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-base font-semibold text-slate-800">
                     선택 인원 {selectedTimelineEntries.length} / 4
                   </div>
                   <div className="mt-1 text-sm text-slate-600">
-                    {selectedTimelineEntries
-                      .map((entry) => entry.nickname)
-                      .join(", ")}
+                    {selectedTimelineEntries.map((entry) => entry.nickname).join(", ")}
                   </div>
                 </div>
 
