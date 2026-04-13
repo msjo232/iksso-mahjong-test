@@ -1,6 +1,19 @@
 "use client";
 
+import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+declare global {
+  interface Window {
+    Kakao?: {
+      isInitialized: () => boolean;
+      init: (key: string) => void;
+      Share: {
+        sendDefault: (options: Record<string, unknown>) => void;
+      };
+    };
+  }
+}
 
 type TabType = "timeline" | "input" | "my";
 type TableType = "1탁" | "2탁";
@@ -153,7 +166,6 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   const aE = timeToSlot(aEnd);
   const bS = timeToSlot(bStart);
   const bE = timeToSlot(bEnd);
-
   return aS < bE && aE > bS;
 }
 
@@ -193,11 +205,8 @@ function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
 
 function formatMemoDateTime(value?: string) {
   if (!value) return "";
-
   const date = new Date(value.replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -209,6 +218,10 @@ function formatMemoDateTime(value?: string) {
 }
 
 export default function Page() {
+  const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JS_KEY || "";
+  const APP_BASE_URL =
+    process.env.NEXT_PUBLIC_APP_BASE_URL || "https://example.com";
+
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [currentUser, setCurrentUser] = useState("");
@@ -229,7 +242,8 @@ export default function Page() {
   const [deletingMemoId, setDeletingMemoId] = useState<string | null>(null);
 
   const [nicknameQuery, setNicknameQuery] = useState("");
-  const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
+  const [showNicknameSuggestions, setShowNicknameSuggestions] =
+    useState(false);
 
   const [currentUserQuery, setCurrentUserQuery] = useState("");
   const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] =
@@ -264,9 +278,15 @@ export default function Page() {
     return () => window.clearTimeout(timer);
   }, [messageText]);
 
+  useEffect(() => {
+    if (!window.Kakao || !KAKAO_JS_KEY) return;
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY);
+    }
+  }, [KAKAO_JS_KEY]);
+
   async function loadMembers() {
     setLoadingMembers(true);
-
     try {
       const res = await fetch("/api/mahjong?action=members", {
         cache: "no-store",
@@ -295,7 +315,6 @@ export default function Page() {
 
   async function loadSchedules(date: string) {
     setLoadingSchedules(true);
-
     try {
       const res = await fetch(
         `/api/mahjong?action=schedules&date=${encodeURIComponent(date)}`,
@@ -332,7 +351,6 @@ export default function Page() {
 
   async function loadMemos(date: string) {
     setLoadingMemos(true);
-
     try {
       const res = await fetch(
         `/api/mahjong?action=memos&date=${encodeURIComponent(date)}`,
@@ -546,20 +564,156 @@ export default function Page() {
 참여 인원
 ${memberLines}
 
-참여 가능하신 분들은 톡방에 확인 남겨주세요.`;
+참여 가능하신 분은 일정등록해주세요.`;
+  }
+
+  function buildSinglePromoMessage() {
+    if (selectedTimelineEntries.length !== 1) return "";
+
+    const entry = selectedTimelineEntries[0];
+    const needed = 4 - selectedTimelineEntries.length;
+
+    return `🀄 익쏘 마작 모집
+
+📅 ${entry.date}
+🕒 ${entry.start} ~ ${entry.end}
+🪑 ${entry.table}
+
+현재 ${entry.nickname} 1명 가능
+${needed}인 모집중입니다.
+
+참여 가능하신 분은 일정등록해주세요.`;
+  }
+
+  function buildMultiPromoMessage() {
+    if (selectedTimelineEntries.length < 2 || selectedTimelineEntries.length >= 4) {
+      return "";
+    }
+
+    const first = selectedTimelineEntries[0];
+    const names = selectedTimelineEntries.map((e) => e.nickname).join(", ");
+    const count = selectedTimelineEntries.length;
+    const needed = 4 - count;
+
+    return `🀄 익쏘 마작 모집
+
+📅 ${first.date}
+🕒 ${first.start} ~ ${first.end}
+🪑 ${first.table}
+
+현재 ${names} ${count}명 가능
+${needed}인 모집중입니다.
+
+참여 가능하신 분은 일정등록해주세요.`;
+  }
+
+  function buildKakaoShareText() {
+    if (selectedTimelineEntries.length === 1) return buildSinglePromoMessage();
+    if (
+      selectedTimelineEntries.length > 1 &&
+      selectedTimelineEntries.length < 4
+    ) {
+      return buildMultiPromoMessage();
+    }
+    if (
+      selectedTimelineEntries.length === 4 &&
+      selectedTimelineInfo?.hasCommonTime
+    ) {
+      return buildSelectedGroupMessage();
+    }
+    return "";
+  }
+
+  async function copyText(text: string, successText = "복사되었습니다.") {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(successText, "success");
+    } catch {
+      showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
+    }
   }
 
   async function copySelectedGroupMessage() {
-    if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) {
-      showToast("선택한 4명의 공통 가능 시간이 없습니다.", "error");
+    const text = buildSelectedGroupMessage();
+    if (!text) {
+      showToast("공통 가능 시간이 없습니다.", "warning");
+      return;
+    }
+    await copyText(text);
+  }
+
+  async function copySinglePromoMessage() {
+    const text = buildSinglePromoMessage();
+    if (!text) {
+      showToast("1명 선택 시에만 사용할 수 있습니다.", "warning");
+      return;
+    }
+    await copyText(text, "홍보 문구가 복사되었습니다.");
+  }
+
+  async function copyMultiPromoMessage() {
+    const text = buildMultiPromoMessage();
+    if (!text) {
+      showToast("2~3명 선택 시 사용 가능합니다.", "warning");
+      return;
+    }
+    await copyText(text, "홍보 문구가 복사되었습니다.");
+  }
+
+  function shareToKakaoTalk() {
+    const text = buildKakaoShareText();
+
+    if (!text) {
+      showToast("공유할 내용이 없습니다.", "warning");
       return;
     }
 
+    if (!window.Kakao) {
+      showToast("카카오 SDK가 아직 로드되지 않았습니다.", "error");
+      return;
+    }
+
+    if (!KAKAO_JS_KEY) {
+      showToast("카카오 JavaScript 키가 설정되지 않았습니다.", "error");
+      return;
+    }
+
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init(KAKAO_JS_KEY);
+    }
+
     try {
-      await navigator.clipboard.writeText(buildSelectedGroupMessage());
-      showToast("복사되었습니다.", "success");
-    } catch {
-      showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: {
+          title:
+            selectedTimelineEntries.length === 4
+              ? "익쏘 마작 모임 확정"
+              : "익쏘 마작 모집",
+          description: text,
+          imageUrl: `${APP_BASE_URL}/og-image.png`,
+          link: {
+            mobileWebUrl: `${APP_BASE_URL}?date=${selectedDate}`,
+            webUrl: `${APP_BASE_URL}?date=${selectedDate}`,
+          },
+        },
+        buttons: [
+          {
+            title: "일정 보러가기",
+            link: {
+              mobileWebUrl: `${APP_BASE_URL}?date=${selectedDate}`,
+              webUrl: `${APP_BASE_URL}?date=${selectedDate}`,
+            },
+          },
+        ],
+      });
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "카카오 공유 중 오류가 발생했습니다.",
+        "error"
+      );
     }
   }
 
@@ -845,6 +999,11 @@ ${memberLines}
 
   return (
     <div className="min-h-screen bg-slate-100 pb-24">
+      <Script
+        src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
+        strategy="afterInteractive"
+      />
+
       {messageText && (
         <div className="fixed left-1/2 top-4 z-[100] w-[calc(100%-24px)] max-w-md -translate-x-1/2">
           <div
@@ -853,6 +1012,13 @@ ${memberLines}
             {messageText}
           </div>
         </div>
+      )}
+
+      {selectedTimelineEntries.length > 0 && (
+        <div
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={clearSelectedTimelineEntries}
+        />
       )}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
@@ -1045,69 +1211,13 @@ ${memberLines}
 
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                  <span className="text-xs text-slate-400">막대를 눌러 4명 선택</span>
+                  <h2 className="text-base font-semibold text-slate-800">
+                    타임라인
+                  </h2>
+                  <span className="text-xs text-slate-400">
+                    막대를 눌러 4명 선택
+                  </span>
                 </div>
-
-                {selectedTimelineEntries.length > 0 && (
-                  <div className="mb-3 rounded-2xl border bg-slate-50 px-3 py-3">
-                    <div className="text-sm font-semibold text-slate-800">
-                      선택 인원 {selectedTimelineEntries.length} / 4
-                    </div>
-                    <div className="mt-1 text-xs text-slate-600">
-                      {selectedTimelineEntries
-                        .map((entry) => entry.nickname)
-                        .join(", ")}
-                    </div>
-
-                    {selectedTimelineInfo && selectedTimelineEntries.length === 4 && (
-                      <div className="mt-3">
-                        {selectedTimelineInfo.hasCommonTime ? (
-                          <>
-                            <div className="text-sm font-semibold text-slate-800">
-                              공통 가능 시간
-                            </div>
-                            <div className="mt-1 text-sm text-slate-700">
-                              {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~{" "}
-                              {selectedTimelineInfo.end}
-                            </div>
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={copySelectedGroupMessage}
-                                className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-                              >
-                                선택 인원 카톡 복사
-                              </button>
-                              <button
-                                type="button"
-                                onClick={clearSelectedTimelineEntries}
-                                className="rounded-2xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
-                              >
-                                선택 해제
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-sm font-semibold text-rose-700">
-                              선택한 4명의 공통 가능 시간이 없습니다.
-                            </div>
-                            <div className="mt-3">
-                              <button
-                                type="button"
-                                onClick={clearSelectedTimelineEntries}
-                                className="rounded-2xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
-                              >
-                                선택 해제
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
                   <div />
@@ -1507,6 +1617,152 @@ ${memberLines}
             </div>
           )}
         </main>
+
+        {selectedTimelineEntries.length > 0 && (
+          <div className="fixed inset-x-0 bottom-20 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
+            <div className="rounded-3xl border bg-white p-4 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-base font-semibold text-slate-800">
+                    선택 인원 {selectedTimelineEntries.length} / 4
+                  </div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {selectedTimelineEntries
+                      .map((entry) => entry.nickname)
+                      .join(", ")}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearSelectedTimelineEntries}
+                  className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                >
+                  닫기
+                </button>
+              </div>
+
+              {selectedTimelineEntries.length === 1 && (
+                <div className="mt-4 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editEntry(selectedTimelineEntries[0])}
+                      className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+                    >
+                      일정 수정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearSelectedTimelineEntries}
+                      className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                    >
+                      선택 해제
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={copySinglePromoMessage}
+                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                    >
+                      홍보카톡 복사
+                    </button>
+                    <button
+                      type="button"
+                      onClick={shareToKakaoTalk}
+                      className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
+                    >
+                      카카오 공유
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedTimelineEntries.length > 1 &&
+                selectedTimelineEntries.length < 4 && (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={copyMultiPromoMessage}
+                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                    >
+                      홍보카톡 복사
+                    </button>
+                    <button
+                      type="button"
+                      onClick={shareToKakaoTalk}
+                      className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
+                    >
+                      카카오 공유
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearSelectedTimelineEntries}
+                      className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                    >
+                      선택 해제
+                    </button>
+                  </div>
+                )}
+
+              {selectedTimelineInfo && selectedTimelineEntries.length === 4 && (
+                <div className="mt-4">
+                  {selectedTimelineInfo.hasCommonTime ? (
+                    <>
+                      <div className="text-sm font-semibold text-slate-800">
+                        공통 가능 시간
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~{" "}
+                        {selectedTimelineInfo.end}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={copySelectedGroupMessage}
+                          className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+                        >
+                          카톡 복사
+                        </button>
+                        <button
+                          type="button"
+                          onClick={shareToKakaoTalk}
+                          className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
+                        >
+                          카카오 공유
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearSelectedTimelineEntries}
+                          className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          선택 해제
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm font-semibold text-rose-700">
+                        선택한 4명의 공통 가능 시간이 없습니다.
+                      </div>
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={clearSelectedTimelineEntries}
+                          className="w-full rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          선택 해제
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white">
