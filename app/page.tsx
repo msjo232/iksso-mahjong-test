@@ -232,10 +232,13 @@ export default function Page() {
   const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
 
   const [currentUserQuery, setCurrentUserQuery] = useState("");
-  const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] = useState(false);
+  const [showCurrentUserSuggestions, setShowCurrentUserSuggestions] =
+    useState(false);
   const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
-  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>([]);
+  const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<
+    Entry[]
+  >([]);
   const [memoInput, setMemoInput] = useState("");
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
@@ -392,7 +395,10 @@ export default function Page() {
         setShowNicknameSuggestions(false);
       }
 
-      if (currentUserBoxRef.current && !currentUserBoxRef.current.contains(target)) {
+      if (
+        currentUserBoxRef.current &&
+        !currentUserBoxRef.current.contains(target)
+      ) {
         setShowCurrentUserSuggestions(false);
         if (hasSelectedCurrentUser && currentUser) {
           setCurrentUserQuery(currentUser);
@@ -403,7 +409,8 @@ export default function Page() {
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
   }, [currentUser, hasSelectedCurrentUser]);
 
   const dayEntries = useMemo(() => {
@@ -446,7 +453,9 @@ export default function Page() {
     if (selectedTimelineEntries.length !== 4) return null;
 
     const table = selectedTimelineEntries[0].table;
-    const allSameTable = selectedTimelineEntries.every((entry) => entry.table === table);
+    const allSameTable = selectedTimelineEntries.every(
+      (entry) => entry.table === table
+    );
 
     if (!allSameTable) {
       return {
@@ -524,7 +533,9 @@ export default function Page() {
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
 
-    const memberLines = selectedTimelineInfo.names.map((name) => `- ${name}`).join("\n");
+    const memberLines = selectedTimelineInfo.names
+      .map((name) => `- ${name}`)
+      .join("\n");
 
     return `🀄 익쏘 마작 모임 확정
 
@@ -590,7 +601,9 @@ ${memberLines}
       await loadMemos(selectedDate);
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "메모 저장 중 오류가 발생했습니다.",
+        error instanceof Error
+          ? error.message
+          : "메모 저장 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
@@ -631,7 +644,9 @@ ${memberLines}
       await loadMemos(selectedDate);
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "메모 삭제 중 오류가 발생했습니다.",
+        error instanceof Error
+          ? error.message
+          : "메모 삭제 중 오류가 발생했습니다.",
         "error"
       );
     } finally {
@@ -843,7 +858,9 @@ ${memberLines}
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
         <header className="bg-blue-600 px-4 pb-5 pt-6 text-white">
           <h1 className="text-xl font-bold">익쏘 마작 시간 조율 시스템</h1>
-          <p className="mt-1 text-sm text-blue-100">모바일 전용 · 1탁 / 2탁 · 06:00 기준</p>
+          <p className="mt-1 text-sm text-blue-100">
+            모바일 전용 · 1탁 / 2탁 · 06:00 기준
+          </p>
         </header>
 
         <div className="border-b bg-white px-3 py-3">
@@ -905,7 +922,9 @@ ${memberLines}
                       >
                         <div className="font-medium">{user.nickname}</div>
                         {user.name && (
-                          <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
+                          <div className="mt-0.5 text-xs text-slate-400">
+                            {user.name}
+                          </div>
                         )}
                       </button>
                     ))}
@@ -994,7 +1013,9 @@ ${memberLines}
                 </div>
 
                 <div className="mt-3 rounded-2xl bg-white p-3">
-                  <div className="mb-2 text-sm font-medium text-slate-700">추가 메모 작성</div>
+                  <div className="mb-2 text-sm font-medium text-slate-700">
+                    추가 메모 작성
+                  </div>
                   <textarea
                     value={memoInput}
                     onChange={(e) => setMemoInput(e.target.value)}
@@ -1034,7 +1055,9 @@ ${memberLines}
                       선택 인원 {selectedTimelineEntries.length} / 4
                     </div>
                     <div className="mt-1 text-xs text-slate-600">
-                      {selectedTimelineEntries.map((entry) => entry.nickname).join(", ")}
+                      {selectedTimelineEntries
+                        .map((entry) => entry.nickname)
+                        .join(", ")}
                     </div>
 
                     {selectedTimelineInfo && selectedTimelineEntries.length === 4 && (
@@ -1088,14 +1111,22 @@ ${memberLines}
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
                   <div />
-                  <div className="text-center text-xs font-semibold text-emerald-700">1탁</div>
+                  <div className="text-center text-xs font-semibold text-emerald-700">
+                    1탁
+                  </div>
                   <div />
-                  <div className="text-center text-xs font-semibold text-indigo-700">2탁</div>
+                  <div className="text-center text-xs font-semibold text-indigo-700">
+                    2탁
+                  </div>
 
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = leftAxisHighlight
-                        ? isSlotInRange(i, leftAxisHighlight.startSlot, leftAxisHighlight.endSlot)
+                        ? isSlotInRange(
+                            i,
+                            leftAxisHighlight.startSlot,
+                            leftAxisHighlight.endSlot
+                          )
                         : false;
 
                       return (
@@ -1140,7 +1171,7 @@ ${memberLines}
                           type="button"
                           onClick={() => toggleTimelineEntry(entry)}
                           className={`absolute rounded-xl bg-emerald-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
-                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
+                            isSelected ? "scale-[1.02] ring-4 ring-yellow-300" : ""
                           }`}
                           style={{
                             left: `calc(${entry.lane} * 20% + 2px)`,
@@ -1163,7 +1194,11 @@ ${memberLines}
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
                       const active = centerAxisHighlight
-                        ? isSlotInRange(i, centerAxisHighlight.startSlot, centerAxisHighlight.endSlot)
+                        ? isSlotInRange(
+                            i,
+                            centerAxisHighlight.startSlot,
+                            centerAxisHighlight.endSlot
+                          )
                         : false;
 
                       return (
@@ -1208,7 +1243,7 @@ ${memberLines}
                           type="button"
                           onClick={() => toggleTimelineEntry(entry)}
                           className={`absolute rounded-xl bg-indigo-500 py-2 text-center text-[11px] font-semibold text-white shadow transition ${
-                            isSelected ? "ring-4 ring-yellow-300 scale-[1.02]" : ""
+                            isSelected ? "scale-[1.02] ring-4 ring-yellow-300" : ""
                           }`}
                           style={{
                             left: `calc(${entry.lane} * 20% + 2px)`,
@@ -1235,9 +1270,12 @@ ${memberLines}
           {tab === "input" && (
             <div className="p-3">
               <div className="rounded-3xl border bg-slate-50 p-4">
-                <h2 className="text-lg font-semibold text-slate-800">가능 시간 입력</h2>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  가능 시간 입력
+                </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  원하는 날짜와 시간을 입력하세요. 하루 기준은 06:00 ~ 익일 05:30입니다.
+                  원하는 날짜와 시간을 입력하세요. 하루 기준은 06:00 ~ 익일
+                  05:30입니다.
                 </p>
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
@@ -1267,7 +1305,10 @@ ${memberLines}
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setForm((prev) => ({ ...prev, nickname: user.nickname }));
+                              setForm((prev) => ({
+                                ...prev,
+                                nickname: user.nickname,
+                              }));
                               setNicknameQuery(user.nickname);
                               setShowNicknameSuggestions(false);
                             }}
@@ -1275,7 +1316,9 @@ ${memberLines}
                           >
                             <div className="font-medium">{user.nickname}</div>
                             {user.name && (
-                              <div className="mt-0.5 text-xs text-slate-400">{user.name}</div>
+                              <div className="mt-0.5 text-xs text-slate-400">
+                                {user.name}
+                              </div>
                             )}
                           </button>
                         ))}
@@ -1292,11 +1335,15 @@ ${memberLines}
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">날짜</label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      날짜
+                    </label>
                     <input
                       type="date"
                       value={form.date}
-                      onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, date: e.target.value }))
+                      }
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
                     />
                   </div>
@@ -1308,7 +1355,9 @@ ${memberLines}
                       </label>
                       <select
                         value={form.start}
-                        onChange={(e) => setForm((prev) => ({ ...prev, start: e.target.value }))}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, start: e.target.value }))
+                        }
                         className="w-full rounded-2xl border px-3 py-3 text-sm"
                       >
                         {timeOptions.map((time) => (
@@ -1325,7 +1374,9 @@ ${memberLines}
                       </label>
                       <select
                         value={form.end}
-                        onChange={(e) => setForm((prev) => ({ ...prev, end: e.target.value }))}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, end: e.target.value }))
+                        }
                         className="w-full rounded-2xl border px-3 py-3 text-sm"
                       >
                         {timeOptions.map((time) => (
@@ -1344,7 +1395,10 @@ ${memberLines}
                     <select
                       value={form.table}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, table: e.target.value as TableType }))
+                        setForm((prev) => ({
+                          ...prev,
+                          table: e.target.value as TableType,
+                        }))
                       }
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
                     >
@@ -1354,10 +1408,14 @@ ${memberLines}
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">메모</label>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      메모
+                    </label>
                     <textarea
                       value={form.memo}
-                      onChange={(e) => setForm((prev) => ({ ...prev, memo: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, memo: e.target.value }))
+                      }
                       rows={3}
                       placeholder="예: 10분 정도 늦을 수 있음"
                       className="w-full rounded-2xl border px-4 py-3 text-sm"
@@ -1405,7 +1463,10 @@ ${memberLines}
                   </div>
                 ) : (
                   myEntries.map((item) => (
-                    <div key={item.id} className="rounded-3xl border bg-white p-4 shadow-sm">
+                    <div
+                      key={item.id}
+                      className="rounded-3xl border bg-white p-4 shadow-sm"
+                    >
                       <div className="flex flex-col gap-3">
                         <div>
                           <div className="text-base font-semibold text-slate-800">
