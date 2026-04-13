@@ -924,8 +924,6 @@ ${needed}인 모집중입니다.
         </div>
       )}
 
-      {selectedTimelineEntries.length > 0 && (
-        <div className="fixed inset-0 z-30 bg-black/20" />
       )}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
