@@ -25,6 +25,14 @@ type Entry = {
   createdAt?: string;
 };
 
+type DailyMemo = {
+  id: string;
+  date: string;
+  nickname: string;
+  memo: string;
+  createdAt?: string;
+};
+
 type MembersResponse = {
   success: boolean;
   members: Member[];
@@ -34,6 +42,12 @@ type MembersResponse = {
 type SchedulesResponse = {
   success: boolean;
   schedules: Entry[];
+  message?: string;
+};
+
+type DailyMemosResponse = {
+  success: boolean;
+  memos: DailyMemo[];
   message?: string;
 };
 
@@ -181,6 +195,7 @@ export default function Page() {
   const [currentUser, setCurrentUser] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [dailyMemos, setDailyMemos] = useState<DailyMemo[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
@@ -188,7 +203,9 @@ export default function Page() {
 
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
+  const [loadingDailyMemos, setLoadingDailyMemos] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingDailyMemo, setSavingDailyMemo] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [nicknameQuery, setNicknameQuery] = useState("");
@@ -199,6 +216,7 @@ export default function Page() {
   const [hasSelectedCurrentUser, setHasSelectedCurrentUser] = useState(false);
 
   const [selectedTimelineEntries, setSelectedTimelineEntries] = useState<Entry[]>([]);
+  const [quickMemoText, setQuickMemoText] = useState("");
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
   const currentUserBoxRef = useRef<HTMLDivElement | null>(null);
@@ -295,12 +313,43 @@ export default function Page() {
     }
   }
 
+  async function loadDailyMemos(date: string) {
+    setLoadingDailyMemos(true);
+
+    try {
+      const res = await fetch(
+        `/api/mahjong?action=dailyMemos&date=${encodeURIComponent(date)}`,
+        {
+          cache: "no-store",
+        }
+      );
+      const data: DailyMemosResponse = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "추가 메모를 불러오지 못했습니다.");
+      }
+
+      setDailyMemos(data.memos);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "추가 메모를 불러오는 중 오류가 발생했습니다.",
+        "error"
+      );
+      setDailyMemos([]);
+    } finally {
+      setLoadingDailyMemos(false);
+    }
+  }
+
   useEffect(() => {
     loadMembers();
   }, []);
 
   useEffect(() => {
     loadSchedules(selectedDate);
+    loadDailyMemos(selectedDate);
     setForm((prev) => ({ ...prev, date: selectedDate }));
   }, [selectedDate]);
 
@@ -511,6 +560,32 @@ export default function Page() {
     };
   }, [selectedTimelineInfo]);
 
+  const scheduleMemos = useMemo(() => {
+    return dayEntries
+      .filter((entry) => entry.memo.trim())
+      .map((entry) => ({
+        id: `schedule-${entry.id}`,
+        nickname: entry.nickname,
+        memo: entry.memo,
+        createdAt: entry.createdAt,
+        source: "일정",
+      }));
+  }, [dayEntries]);
+
+  const extraMemos = useMemo(() => {
+    return dailyMemos.map((memo) => ({
+      id: `daily-${memo.id}`,
+      nickname: memo.nickname,
+      memo: memo.memo,
+      createdAt: memo.createdAt,
+      source: "추가",
+    }));
+  }, [dailyMemos]);
+
+  const allVisibleMemos = useMemo(() => {
+    return [...scheduleMemos, ...extraMemos];
+  }, [scheduleMemos, extraMemos]);
+
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
 
@@ -540,6 +615,52 @@ ${memberLines}
       showToast("복사되었습니다.", "success");
     } catch {
       showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
+    }
+  }
+
+  async function saveQuickMemo() {
+    if (!currentUser) {
+      showToast("우측 상단 회원검색에서 닉네임을 먼저 선택해주세요.", "warning");
+      return;
+    }
+
+    if (!quickMemoText.trim()) {
+      showToast("메모 내용을 입력해주세요.", "warning");
+      return;
+    }
+
+    setSavingDailyMemo(true);
+
+    try {
+      const res = await fetch("/api/mahjong", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "saveDailyMemo",
+          date: selectedDate,
+          nickname: currentUser,
+          memo: quickMemoText.trim(),
+        }),
+      });
+
+      const data: SaveResponse = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "메모 저장에 실패했습니다.");
+      }
+
+      setQuickMemoText("");
+      await loadDailyMemos(selectedDate);
+      showToast("메모가 저장되었습니다.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "메모 저장 중 오류가 발생했습니다.",
+        "error"
+      );
+    } finally {
+      setSavingDailyMemo(false);
     }
   }
 
@@ -748,9 +869,7 @@ ${memberLines}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
         <header className="bg-blue-600 px-4 pb-5 pt-6 text-white">
-          <h1 className="text-xl font-bold">
-            익쏘 마작 시간 조율 시스템 <span className="text-sm text-yellow-300">(테스트)</span>
-          </h1>
+          <h1 className="text-xl font-bold">익쏘 마작 시간 조율 시스템</h1>
           <p className="mt-1 text-sm text-blue-100">모바일 전용 · 1탁 / 2탁 · 06:00 기준</p>
         </header>
 
@@ -834,63 +953,67 @@ ${memberLines}
           {tab === "timeline" && (
             <div className="space-y-3 p-3">
               <div className="rounded-3xl border bg-slate-50 p-4">
-                <h2 className="text-base font-semibold text-slate-800">날짜 요약</h2>
-                <p className="mt-1 text-sm text-slate-500">{selectedDate} 06:00 ~ 익일 05:30</p>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-2xl bg-white px-3 py-3 text-slate-700">
-                    입력 인원
-                    <div className="mt-1 text-lg font-bold text-slate-900">
-                      {loadingSchedules ? "-" : `${dayEntries.length}명`}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-white px-3 py-3 text-slate-700">
-                    겹침 구간
-                    <div className="mt-1 text-lg font-bold text-slate-900">
-                      {loadingSchedules ? "-" : `${overlapSummary.length}개`}
-                    </div>
-                  </div>
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-slate-800">메모</h2>
+                  <span className="text-xs text-slate-400">
+                    선택 닉네임: {currentUser || "없음"}
+                  </span>
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  {loadingSchedules ? (
+                <div className="mb-3 text-sm text-slate-500">
+                  시간입력 시 적은 메모와 추가 메모가 함께 표시됩니다.
+                </div>
+
+                <div className="space-y-2">
+                  {loadingSchedules || loadingDailyMemos ? (
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
-                      일정을 불러오는 중입니다.
+                      메모를 불러오는 중입니다.
                     </div>
-                  ) : overlapSummary.length === 0 ? (
+                  ) : allVisibleMemos.length === 0 ? (
                     <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
-                      아직 4명 이상 겹치는 구간이 없어요.
+                      아직 등록된 메모가 없습니다.
                     </div>
                   ) : (
-                    overlapSummary.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="rounded-2xl bg-amber-50 px-3 py-3 text-sm text-amber-800"
-                      >
-                        {item.start} ~ {item.end} · 최대 {item.count}명 가능
+                    allVisibleMemos.map((item) => (
+                      <div key={item.id} className="rounded-2xl bg-white px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-800">
+                            {item.nickname}
+                          </div>
+                          <div className="text-[11px] text-slate-400">{item.source}</div>
+                        </div>
+                        <div className="mt-1 text-sm text-slate-600">{item.memo}</div>
                       </div>
                     ))
                   )}
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  {tableWarnings.map((item) =>
-                    item.full ? (
-                      <div
-                        key={item.table}
-                        className="rounded-2xl bg-rose-50 px-3 py-3 text-sm text-rose-700"
-                      >
-                        {item.table}은 현재 일부 시간대가 최대 5명으로 가득 찼습니다.
-                      </div>
-                    ) : (
-                      <div
-                        key={item.table}
-                        className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500"
-                      >
-                        {item.table} 최대 겹침 인원: {item.maxOverlap}명
-                      </div>
-                    )
-                  )}
+                <div className="mt-4 rounded-2xl bg-white p-3">
+                  <div className="mb-2 text-sm font-semibold text-slate-800">추가 메모 작성</div>
+                  <textarea
+                    value={quickMemoText}
+                    onChange={(e) => setQuickMemoText(e.target.value)}
+                    rows={3}
+                    placeholder={
+                      currentUser
+                        ? `${currentUser} 이름으로 메모가 저장됩니다.`
+                        : "우측 상단 회원검색에서 닉네임을 먼저 선택해주세요."
+                    }
+                    className="w-full rounded-2xl border px-4 py-3 text-sm"
+                  />
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="text-xs text-slate-500">
+                      저장 닉네임: {currentUser || "선택 안 됨"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveQuickMemo}
+                      disabled={savingDailyMemo}
+                      className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {savingDailyMemo ? "저장 중..." : "메모 저장"}
+                    </button>
+                  </div>
                 </div>
               </div>
 
