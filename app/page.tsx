@@ -1,19 +1,6 @@
 "use client";
 
-import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-declare global {
-  interface Window {
-    Kakao?: {
-      isInitialized: () => boolean;
-      init: (key: string) => void;
-      Share: {
-        sendDefault: (options: Record<string, unknown>) => void;
-      };
-    };
-  }
-}
 
 type TabType = "timeline" | "input" | "my";
 type TableType = "1탁" | "2탁";
@@ -166,6 +153,7 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   const aE = timeToSlot(aEnd);
   const bS = timeToSlot(bStart);
   const bE = timeToSlot(bEnd);
+
   return aS < bE && aE > bS;
 }
 
@@ -205,8 +193,11 @@ function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
 
 function formatMemoDateTime(value?: string) {
   if (!value) return "";
+
   const date = new Date(value.replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -218,10 +209,6 @@ function formatMemoDateTime(value?: string) {
 }
 
 export default function Page() {
-  const KAKAO_JS_KEY = process.env.NEXT_PUBLIC_KAKAO_JS_KEY || "";
-  const APP_BASE_URL =
-    process.env.NEXT_PUBLIC_APP_BASE_URL || "https://example.com";
-
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
   const [currentUser, setCurrentUser] = useState("");
@@ -278,15 +265,9 @@ export default function Page() {
     return () => window.clearTimeout(timer);
   }, [messageText]);
 
-  useEffect(() => {
-    if (!window.Kakao || !KAKAO_JS_KEY) return;
-    if (!window.Kakao.isInitialized()) {
-      window.Kakao.init(KAKAO_JS_KEY);
-    }
-  }, [KAKAO_JS_KEY]);
-
   async function loadMembers() {
     setLoadingMembers(true);
+
     try {
       const res = await fetch("/api/mahjong?action=members", {
         cache: "no-store",
@@ -315,6 +296,7 @@ export default function Page() {
 
   async function loadSchedules(date: string) {
     setLoadingSchedules(true);
+
     try {
       const res = await fetch(
         `/api/mahjong?action=schedules&date=${encodeURIComponent(date)}`,
@@ -351,6 +333,7 @@ export default function Page() {
 
   async function loadMemos(date: string) {
     setLoadingMemos(true);
+
     try {
       const res = await fetch(
         `/api/mahjong?action=memos&date=${encodeURIComponent(date)}`,
@@ -586,7 +569,10 @@ ${needed}인 모집중입니다.
   }
 
   function buildMultiPromoMessage() {
-    if (selectedTimelineEntries.length < 2 || selectedTimelineEntries.length >= 4) {
+    if (
+      selectedTimelineEntries.length < 2 ||
+      selectedTimelineEntries.length >= 4
+    ) {
       return "";
     }
 
@@ -605,23 +591,6 @@ ${needed}인 모집중입니다.
 ${needed}인 모집중입니다.
 
 참여 가능하신 분은 일정등록해주세요.`;
-  }
-
-  function buildKakaoShareText() {
-    if (selectedTimelineEntries.length === 1) return buildSinglePromoMessage();
-    if (
-      selectedTimelineEntries.length > 1 &&
-      selectedTimelineEntries.length < 4
-    ) {
-      return buildMultiPromoMessage();
-    }
-    if (
-      selectedTimelineEntries.length === 4 &&
-      selectedTimelineInfo?.hasCommonTime
-    ) {
-      return buildSelectedGroupMessage();
-    }
-    return "";
   }
 
   async function copyText(text: string, successText = "복사되었습니다.") {
@@ -658,63 +627,6 @@ ${needed}인 모집중입니다.
       return;
     }
     await copyText(text, "홍보 문구가 복사되었습니다.");
-  }
-
-  function shareToKakaoTalk() {
-    const text = buildKakaoShareText();
-
-    if (!text) {
-      showToast("공유할 내용이 없습니다.", "warning");
-      return;
-    }
-
-    if (!window.Kakao) {
-      showToast("카카오 SDK가 아직 로드되지 않았습니다.", "error");
-      return;
-    }
-
-    if (!KAKAO_JS_KEY) {
-      showToast("카카오 JavaScript 키가 설정되지 않았습니다.", "error");
-      return;
-    }
-
-    if (!window.Kakao.isInitialized()) {
-      window.Kakao.init(KAKAO_JS_KEY);
-    }
-
-    try {
-      window.Kakao.Share.sendDefault({
-        objectType: "feed",
-        content: {
-          title:
-            selectedTimelineEntries.length === 4
-              ? "익쏘 마작 모임 확정"
-              : "익쏘 마작 모집",
-          description: text,
-          imageUrl: `${APP_BASE_URL}/og-image.png`,
-          link: {
-            mobileWebUrl: `${APP_BASE_URL}?date=${selectedDate}`,
-            webUrl: `${APP_BASE_URL}?date=${selectedDate}`,
-          },
-        },
-        buttons: [
-          {
-            title: "일정 보러가기",
-            link: {
-              mobileWebUrl: `${APP_BASE_URL}?date=${selectedDate}`,
-              webUrl: `${APP_BASE_URL}?date=${selectedDate}`,
-            },
-          },
-        ],
-      });
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "카카오 공유 중 오류가 발생했습니다.",
-        "error"
-      );
-    }
   }
 
   async function saveMemo() {
@@ -907,7 +819,10 @@ ${needed}인 모집중입니다.
         throw new Error(data.message || "저장에 실패했습니다.");
       }
 
-      showToast(editingId ? "일정을 수정했어요." : "일정을 저장했어요.", "success");
+      showToast(
+        editingId ? "일정을 수정했어요." : "일정을 저장했어요.",
+        "success"
+      );
       setSelectedDate(form.date);
       setCurrentUser(form.nickname);
       setCurrentUserQuery(form.nickname);
@@ -999,11 +914,6 @@ ${needed}인 모집중입니다.
 
   return (
     <div className="min-h-screen bg-slate-100 pb-24">
-      <Script
-        src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
-        strategy="afterInteractive"
-      />
-
       {messageText && (
         <div className="fixed left-1/2 top-4 z-[100] w-[calc(100%-24px)] max-w-md -translate-x-1/2">
           <div
@@ -1015,10 +925,7 @@ ${needed}인 모집중입니다.
       )}
 
       {selectedTimelineEntries.length > 0 && (
-        <div
-          className="fixed inset-0 z-30 bg-black/20"
-          onClick={clearSelectedTimelineEntries}
-        />
+        <div className="fixed inset-0 z-30 bg-black/20" />
       )}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-white shadow-xl">
@@ -1620,7 +1527,10 @@ ${needed}인 모집중입니다.
 
         {selectedTimelineEntries.length > 0 && (
           <div className="fixed inset-x-0 bottom-20 z-40 mx-auto w-[calc(100%-24px)] max-w-md">
-            <div className="rounded-3xl border bg-white p-4 shadow-2xl">
+            <div
+              className="rounded-3xl border bg-white p-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-base font-semibold text-slate-800">
@@ -1660,7 +1570,7 @@ ${needed}인 모집중입니다.
                       선택 해제
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2">
                     <button
                       type="button"
                       onClick={copySinglePromoMessage}
@@ -1668,33 +1578,19 @@ ${needed}인 모집중입니다.
                     >
                       홍보카톡 복사
                     </button>
-                    <button
-                      type="button"
-                      onClick={shareToKakaoTalk}
-                      className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
-                    >
-                      카카오 공유
-                    </button>
                   </div>
                 </div>
               )}
 
               {selectedTimelineEntries.length > 1 &&
                 selectedTimelineEntries.length < 4 && (
-                  <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={copyMultiPromoMessage}
                       className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
                     >
                       홍보카톡 복사
-                    </button>
-                    <button
-                      type="button"
-                      onClick={shareToKakaoTalk}
-                      className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
-                    >
-                      카카오 공유
                     </button>
                     <button
                       type="button"
@@ -1718,20 +1614,13 @@ ${needed}인 모집중입니다.
                         {selectedTimelineInfo.end}
                       </div>
 
-                      <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="mt-4 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={copySelectedGroupMessage}
                           className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
                         >
                           카톡 복사
-                        </button>
-                        <button
-                          type="button"
-                          onClick={shareToKakaoTalk}
-                          className="rounded-2xl bg-yellow-400 px-4 py-3 text-sm font-semibold text-slate-900"
-                        >
-                          카카오 공유
                         </button>
                         <button
                           type="button"
