@@ -638,7 +638,7 @@ ${memberLines}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          action: "saveDailyMemo",
+          action: "saveMemo",
           date: selectedDate,
           nickname: currentUser,
           memo: quickMemoText.trim(),
