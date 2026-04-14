@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const APPS_SCRIPT_URL = process.env.GAS_WEB_APP_URL || "";
+const APPS_SCRIPT_URL = process.env.GAS_WEB_APP_URL || "https://script.google.com/macros/s/AKfycbwJ-ns_rL5FZ_gX66UB9sw3MyEM6WzNsCt6Dazp4jff9wufrv9o8O9oGpQvCu64ErX26w/exec";
 
 function buildGetUrl(searchParams: URLSearchParams) {
   return `${APPS_SCRIPT_URL}?${searchParams.toString()}`;
