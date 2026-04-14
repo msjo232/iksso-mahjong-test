@@ -1,48 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzTqTx73Nem9_llIPRlbcrb939e7Q2FFQ4TB2hV_6QmNDatQC2HuzZ_r2SBv4YfKTE3Ww/exec";
+const APPS_SCRIPT_URL = process.env.GAS_WEB_APP_URL || "";
+
+function buildGetUrl(searchParams: URLSearchParams) {
+  return `${APPS_SCRIPT_URL}?${searchParams.toString()}`;
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get("action");
+    if (!APPS_SCRIPT_URL) {
+      return NextResponse.json(
+        { success: false, message: "GAS_WEB_APP_URL이 설정되지 않았습니다." },
+        { status: 500 }
+      );
+    }
 
-    if (!action) {
+    const { searchParams } = new URL(req.url);
+    const action = (searchParams.get("action") || "").trim();
+
+    const allowedActions = ["members", "schedules", "memos", "meetings"];
+
+    if (!allowedActions.includes(action)) {
       return NextResponse.json({
         success: false,
-        message: "action이 필요합니다.",
+        message: "잘못된 요청입니다.",
       });
     }
 
-    const targetUrl = `${SCRIPT_URL}?${searchParams.toString()}`;
-
-    const res = await fetch(targetUrl, {
+    const response = await fetch(buildGetUrl(searchParams), {
       method: "GET",
       cache: "no-store",
     });
 
-    const data = await res.json();
-    return NextResponse.json(data);
+    const text = await response.text();
+
+    try {
+      const data = JSON.parse(text);
+      return NextResponse.json(data);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        message: "Apps Script 응답이 JSON 형식이 아닙니다.",
+        raw: text,
+      });
+    }
   } catch (error) {
     return NextResponse.json({
       success: false,
       message:
-        error instanceof Error ? error.message : "GET 요청 처리 중 오류 발생",
+        error instanceof Error
+          ? error.message
+          : "GET 요청 처리 중 오류가 발생했습니다.",
     });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    if (!APPS_SCRIPT_URL) {
+      return NextResponse.json(
+        { success: false, message: "GAS_WEB_APP_URL이 설정되지 않았습니다." },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json();
-    const action = body?.action;
+    const action = String(body?.action || "").trim();
 
     const allowedActions = [
       "saveSchedule",
       "deleteSchedule",
       "saveMemo",
       "deleteMemo",
+      "saveMeeting",
+      "confirmMeeting",
+      "deleteMeeting",
     ];
 
     if (!allowedActions.includes(action)) {
@@ -52,21 +84,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const res = await fetch(SCRIPT_URL, {
+    const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      cache: "no-store",
     });
 
-    const data = await res.json();
-    return NextResponse.json(data);
+    const text = await response.text();
+
+    try {
+      const data = JSON.parse(text);
+      return NextResponse.json(data);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        message: "Apps Script 응답이 JSON 형식이 아닙니다.",
+        raw: text,
+      });
+    }
   } catch (error) {
     return NextResponse.json({
       success: false,
       message:
-        error instanceof Error ? error.message : "POST 요청 처리 중 오류 발생",
+        error instanceof Error
+          ? error.message
+          : "POST 요청 처리 중 오류가 발생했습니다.",
     });
   }
 }
