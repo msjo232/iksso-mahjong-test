@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
       "saveMemo",
       "deleteMemo",
       "saveMeeting",
+      "joinMeeting",
+      "leaveMeeting",
       "confirmMeeting",
+      "cancelMeetingConfirm",
       "deleteMeeting",
     ];
 
