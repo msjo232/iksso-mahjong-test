@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
   try {
     if (!APPS_SCRIPT_URL) {
       return NextResponse.json(
-        { success: false, message: "GAS_WEB_APP_URL이 설정되지 않았습니다." },
+        {
+          success: false,
+          message: "GAS_WEB_APP_URL이 설정되지 않았습니다.",
+        },
         { status: 500 }
       );
     }
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const action = (searchParams.get("action") || "").trim();
 
-    const allowedActions = ["members", "schedules", "memos", "meetings"];
+    const allowedActions = ["members", "schedules", "memos"];
 
     if (!allowedActions.includes(action)) {
       return NextResponse.json({
@@ -59,7 +62,10 @@ export async function POST(req: NextRequest) {
   try {
     if (!APPS_SCRIPT_URL) {
       return NextResponse.json(
-        { success: false, message: "GAS_WEB_APP_URL이 설정되지 않았습니다." },
+        {
+          success: false,
+          message: "GAS_WEB_APP_URL이 설정되지 않았습니다.",
+        },
         { status: 500 }
       );
     }
@@ -72,12 +78,6 @@ export async function POST(req: NextRequest) {
       "deleteSchedule",
       "saveMemo",
       "deleteMemo",
-      "saveMeeting",
-      "joinMeeting",
-      "leaveMeeting",
-      "confirmMeeting",
-      "cancelMeetingConfirm",
-      "deleteMeeting",
     ];
 
     if (!allowedActions.includes(action)) {
