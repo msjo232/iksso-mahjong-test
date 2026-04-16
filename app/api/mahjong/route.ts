@@ -6,6 +6,20 @@ function buildGetUrl(searchParams: URLSearchParams) {
   return `${APPS_SCRIPT_URL}?${searchParams.toString()}`;
 }
 
+async function parseAppsScriptResponse(response: Response) {
+  const text = await response.text();
+
+  try {
+    return NextResponse.json(JSON.parse(text));
+  } catch {
+    return NextResponse.json({
+      success: false,
+      message: "Apps Script 응답이 JSON 형식이 아닙니다.",
+      raw: text,
+    });
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     if (!APPS_SCRIPT_URL) {
@@ -35,18 +49,7 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
     });
 
-    const text = await response.text();
-
-    try {
-      const data = JSON.parse(text);
-      return NextResponse.json(data);
-    } catch {
-      return NextResponse.json({
-        success: false,
-        message: "Apps Script 응답이 JSON 형식이 아닙니다.",
-        raw: text,
-      });
-    }
+    return await parseAppsScriptResponse(response);
   } catch (error) {
     return NextResponse.json({
       success: false,
@@ -96,18 +99,7 @@ export async function POST(req: NextRequest) {
       cache: "no-store",
     });
 
-    const text = await response.text();
-
-    try {
-      const data = JSON.parse(text);
-      return NextResponse.json(data);
-    } catch {
-      return NextResponse.json({
-        success: false,
-        message: "Apps Script 응답이 JSON 형식이 아닙니다.",
-        raw: text,
-      });
-    }
+    return await parseAppsScriptResponse(response);
   } catch (error) {
     return NextResponse.json({
       success: false,
