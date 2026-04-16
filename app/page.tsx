@@ -33,18 +33,6 @@ type MemoItem = {
   createdAt?: string;
 };
 
-type Meeting = {
-  id: string;
-  date: string;
-  table: TableType;
-  start: string;
-  end: string;
-  members: string[];
-  confirmedMembers: string[];
-  status: "pending" | "confirmed";
-  createdAt?: string;
-};
-
 type MembersResponse = {
   success: boolean;
   members: Member[];
@@ -63,18 +51,9 @@ type MemosResponse = {
   message?: string;
 };
 
-type MeetingsResponse = {
-  success: boolean;
-  meetings: Meeting[];
-  message?: string;
-};
-
 type SaveResponse = {
   success: boolean;
   id?: string;
-  status?: string;
-  confirmedMembers?: string[];
-  members?: string[];
   message?: string;
 };
 
@@ -156,13 +135,6 @@ function timeToSlot(time: string) {
   return slot - 12;
 }
 
-function slotToTime(slot: number) {
-  const real = (slot + 12) % 48;
-  const h = String(Math.floor(real / 2)).padStart(2, "0");
-  const m = real % 2 === 0 ? "00" : "30";
-  return `${h}:${m}`;
-}
-
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   const aS = timeToSlot(aStart);
   const aE = timeToSlot(aEnd);
@@ -200,10 +172,6 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
   });
 }
 
-function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
-  return slot >= startSlot && slot <= endSlot;
-}
-
 function formatDateTime(value?: string) {
   if (!value) return "";
   const date = new Date(value.replace(" ", "T"));
@@ -217,16 +185,12 @@ function formatDateTime(value?: string) {
   return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
-function sameMembers(a: string[], b: string[]) {
-  if (a.length !== b.length) return false;
-  return [...a].sort().join("|") === [...b].sort().join("|");
-}
-
 function normalizeDate(value: unknown) {
   const str = String(value || "").trim();
   if (!str) return "";
   const m = str.match(/^(\d{4}-\d{2}-\d{2})/);
   if (m) return m[1];
+
   const parsed = new Date(str);
   if (!Number.isNaN(parsed.getTime())) {
     const y = parsed.getFullYear();
@@ -234,6 +198,7 @@ function normalizeDate(value: unknown) {
     const d = String(parsed.getDate()).padStart(2, "0");
     return `${y}-${mo}-${d}`;
   }
+
   return str;
 }
 
@@ -242,12 +207,14 @@ function normalizeTime(value: unknown) {
   if (!str) return "";
   const m = str.match(/^(\d{1,2}):(\d{2})/);
   if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
+
   const parsed = new Date(str);
   if (!Number.isNaN(parsed.getTime())) {
     const hh = String(parsed.getHours()).padStart(2, "0");
     const mm = String(parsed.getMinutes()).padStart(2, "0");
     return `${hh}:${mm}`;
   }
+
   return str;
 }
 
@@ -279,22 +246,6 @@ function normalizeMemo(raw: any): MemoItem {
   };
 }
 
-function normalizeMeeting(raw: any): Meeting {
-  return {
-    id: String(raw?.id || ""),
-    date: normalizeDate(raw?.date),
-    table: normalizeTable(raw?.table),
-    start: normalizeTime(raw?.start),
-    end: normalizeTime(raw?.end),
-    members: Array.isArray(raw?.members) ? raw.members : [],
-    confirmedMembers: Array.isArray(raw?.confirmedMembers)
-      ? raw.confirmedMembers
-      : [],
-    status: raw?.status === "confirmed" ? "confirmed" : "pending",
-    createdAt: String(raw?.createdAt || ""),
-  };
-}
-
 export default function Page() {
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
@@ -302,7 +253,6 @@ export default function Page() {
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
@@ -311,16 +261,11 @@ export default function Page() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
   const [loadingMemos, setLoadingMemos] = useState(true);
-  const [loadingMeetings, setLoadingMeetings] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [savingMemo, setSavingMemo] = useState(false);
-  const [savingMeeting, setSavingMeeting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingMemoId, setDeletingMemoId] = useState<string | null>(null);
-  const [confirmingMeetingId, setConfirmingMeetingId] = useState<string | null>(
-    null
-  );
 
   const [nicknameQuery, setNicknameQuery] = useState("");
   const [showNicknameSuggestions, setShowNicknameSuggestions] = useState(false);
@@ -334,13 +279,6 @@ export default function Page() {
     []
   );
   const [memoInput, setMemoInput] = useState("");
-
-  const [meetingForm, setMeetingForm] = useState({
-    date: getToday(),
-    start: "19:00",
-    end: "23:00",
-    table: "1탁" as TableType,
-  });
 
   const nicknameBoxRef = useRef<HTMLDivElement | null>(null);
   const currentUserBoxRef = useRef<HTMLDivElement | null>(null);
@@ -447,33 +385,6 @@ export default function Page() {
     }
   }
 
-  async function loadMeetings(date: string) {
-    setLoadingMeetings(true);
-    try {
-      const res = await fetch(
-        `/api/mahjong?action=meetings&date=${encodeURIComponent(date)}`,
-        { cache: "no-store" }
-      );
-      const data: MeetingsResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "모임일정 데이터를 불러오지 못했습니다.");
-      }
-
-      setMeetings((data.meetings || []).map(normalizeMeeting));
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "모임일정 데이터를 불러오는 중 오류가 발생했습니다.",
-        "error"
-      );
-      setMeetings([]);
-    } finally {
-      setLoadingMeetings(false);
-    }
-  }
-
   useEffect(() => {
     loadMembers();
   }, []);
@@ -481,9 +392,7 @@ export default function Page() {
   useEffect(() => {
     loadSchedules(selectedDate);
     loadMemos(selectedDate);
-    loadMeetings(selectedDate);
     setForm((prev) => ({ ...prev, date: selectedDate }));
-    setMeetingForm((prev) => ({ ...prev, date: selectedDate }));
     setSelectedTimelineEntries([]);
   }, [selectedDate]);
 
@@ -534,11 +443,6 @@ export default function Page() {
     [entries, selectedDate]
   );
 
-  const dayMeetings = useMemo(
-    () => meetings.filter((item) => item.date === selectedDate),
-    [meetings, selectedDate]
-  );
-
   const filteredMembers = useMemo(() => {
     if (!nicknameQuery.trim()) return members.slice(0, 8);
     return members
@@ -572,80 +476,6 @@ export default function Page() {
       : [];
   }, [entries, currentUser]);
 
-  const myMeetings = useMemo(() => {
-    return currentUser
-      ? dayMeetings.filter((meeting) => meeting.members.includes(currentUser))
-      : [];
-  }, [dayMeetings, currentUser]);
-
-  const selectedTimelineInfo = useMemo(() => {
-    if (selectedTimelineEntries.length !== 4) return null;
-
-    const table = selectedTimelineEntries[0].table;
-    const allSameTable = selectedTimelineEntries.every(
-      (entry) => entry.table === table
-    );
-
-    if (!allSameTable) {
-      return {
-        table,
-        names: selectedTimelineEntries.map((entry) => entry.nickname),
-        hasCommonTime: false,
-        start: "",
-        end: "",
-        startSlot: -1,
-        endSlot: -1,
-      };
-    }
-
-    const startSlot = Math.max(
-      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.start))
-    );
-    const endSlot = Math.min(
-      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.end))
-    );
-
-    if (startSlot >= endSlot) {
-      return {
-        table,
-        names: selectedTimelineEntries.map((entry) => entry.nickname),
-        hasCommonTime: false,
-        start: "",
-        end: "",
-        startSlot: -1,
-        endSlot: -1,
-      };
-    }
-
-    return {
-      table,
-      names: selectedTimelineEntries.map((entry) => entry.nickname),
-      hasCommonTime: true,
-      start: slotToTime(startSlot),
-      end: slotToTime(endSlot),
-      startSlot,
-      endSlot,
-    };
-  }, [selectedTimelineEntries]);
-
-  const leftAxisHighlight = useMemo(() => {
-    if (!selectedTimelineInfo?.hasCommonTime) return null;
-    if (selectedTimelineInfo.table !== "1탁") return null;
-    return {
-      startSlot: selectedTimelineInfo.startSlot,
-      endSlot: selectedTimelineInfo.endSlot,
-    };
-  }, [selectedTimelineInfo]);
-
-  const centerAxisHighlight = useMemo(() => {
-    if (!selectedTimelineInfo?.hasCommonTime) return null;
-    if (selectedTimelineInfo.table !== "2탁") return null;
-    return {
-      startSlot: selectedTimelineInfo.startSlot,
-      endSlot: selectedTimelineInfo.endSlot,
-    };
-  }, [selectedTimelineInfo]);
-
   const mergedMemos = useMemo(() => {
     return [...memos].sort((a, b) => {
       const aTime = new Date((a.createdAt || "").replace(" ", "T")).getTime();
@@ -658,84 +488,30 @@ export default function Page() {
     });
   }, [memos]);
 
-  const confirmedMeetings = useMemo(
-    () => dayMeetings.filter((meeting) => meeting.status === "confirmed"),
-    [dayMeetings]
-  );
-
-  const confirmedSlotsByTable = useMemo(() => {
-    const result: Record<TableType, Set<number>> = {
-      "1탁": new Set<number>(),
-      "2탁": new Set<number>(),
-    };
-
-    confirmedMeetings.forEach((meeting) => {
-      const start = timeToSlot(meeting.start);
-      const end = timeToSlot(meeting.end);
-      for (let slot = start; slot <= end; slot += 1) {
-        result[meeting.table].add(slot);
-      }
-    });
-
-    return result;
-  }, [confirmedMeetings]);
-
-  function buildSelectedGroupMessage() {
-    if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
-
-    const memberLines = selectedTimelineInfo.names.map((name) => `- ${name}`).join("\n");
-
-    return `🀄 익쏘 마작 모임 확정
-
-📅 ${selectedDate}
-🕒 ${selectedTimelineInfo.start} ~ ${selectedTimelineInfo.end}
-🪑 ${selectedTimelineInfo.table}
-
-참여 인원
-${memberLines}
-
-참여 가능하신 분은 일정등록해주세요.`;
-  }
-
-  function buildSinglePromoMessage() {
-    if (selectedTimelineEntries.length !== 1) return "";
-
-    const entry = selectedTimelineEntries[0];
-    const needed = 4 - selectedTimelineEntries.length;
-
-    return `🀄 익쏘 마작 모집
-
-📅 ${entry.date}
-🕒 ${entry.start} ~ ${entry.end}
-🪑 ${entry.table}
-
-현재 ${entry.nickname} 1명 가능
-${needed}인 모집중입니다.
-
-참여 가능하신 분은 일정등록해주세요.`;
-  }
-
-  function buildMultiPromoMessage() {
-    if (
-      selectedTimelineEntries.length < 2 ||
-      selectedTimelineEntries.length >= 4
-    ) {
-      return "";
-    }
+  function buildSelectedBarsMessage() {
+    if (selectedTimelineEntries.length === 0) return "";
 
     const first = selectedTimelineEntries[0];
     const names = selectedTimelineEntries.map((e) => e.nickname).join(", ");
     const count = selectedTimelineEntries.length;
-    const needed = 4 - count;
+    const needed = Math.max(0, 4 - count);
+
+    const lines = selectedTimelineEntries
+      .map((e) => `- ${e.nickname} (${e.start}~${e.end})`)
+      .join("\n");
 
     return `🀄 익쏘 마작 모집
 
 📅 ${first.date}
-🕒 ${first.start} ~ ${first.end}
 🪑 ${first.table}
 
-현재 ${names} ${count}명 가능
-${needed}인 모집중입니다.
+현재 가능 인원 ${count}명
+${names}
+
+가능 시간
+${lines}
+
+${needed > 0 ? `${needed}인 모집중입니다.` : "인원 확인 부탁드립니다."}
 
 참여 가능하신 분은 일정등록해주세요.`;
   }
@@ -749,28 +525,10 @@ ${needed}인 모집중입니다.
     }
   }
 
-  async function copySelectedGroupMessage() {
-    const text = buildSelectedGroupMessage();
+  async function copySelectedBarsMessage() {
+    const text = buildSelectedBarsMessage();
     if (!text) {
-      showToast("공통 가능 시간이 없습니다.", "warning");
-      return;
-    }
-    await copyText(text);
-  }
-
-  async function copySinglePromoMessage() {
-    const text = buildSinglePromoMessage();
-    if (!text) {
-      showToast("1명 선택 시에만 사용할 수 있습니다.", "warning");
-      return;
-    }
-    await copyText(text, "홍보 문구가 복사되었습니다.");
-  }
-
-  async function copyMultiPromoMessage() {
-    const text = buildMultiPromoMessage();
-    if (!text) {
-      showToast("2~3명 선택 시 사용 가능합니다.", "warning");
+      showToast("선택된 일정이 없습니다.", "warning");
       return;
     }
     await copyText(text, "홍보 문구가 복사되었습니다.");
@@ -819,285 +577,6 @@ ${needed}인 모집중입니다.
       );
     } finally {
       setSavingMemo(false);
-    }
-  }
-
-  async function saveMeeting({
-    date,
-    table,
-    start,
-    end,
-    members,
-  }: {
-    date: string;
-    table: TableType;
-    start: string;
-    end: string;
-    members?: string[];
-  }) {
-    if (!currentUser) {
-      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
-      return;
-    }
-
-    if (!date || !table || !start || !end) {
-      showToast("모임 생성 정보가 부족합니다.", "warning");
-      return;
-    }
-
-    if (timeToSlot(start) >= timeToSlot(end)) {
-      showToast("종료시간은 시작시간보다 뒤여야 합니다.", "warning");
-      return;
-    }
-
-    setSavingMeeting(true);
-
-    try {
-      const memberList = members || [];
-      const res = await fetch("/api/mahjong", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "saveMeeting",
-          date,
-          table,
-          start,
-          end,
-          members: memberList,
-          creator: currentUser,
-        }),
-      });
-
-      const data: SaveResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "모임 일정 등록에 실패했습니다.");
-      }
-
-      showToast("모임 일정이 등록되었습니다. 생성자는 자동 확정됩니다.", "success");
-      clearSelectedTimelineEntries();
-      await loadMeetings(selectedDate);
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "모임 일정 등록 중 오류가 발생했습니다.",
-        "error"
-      );
-    } finally {
-      setSavingMeeting(false);
-    }
-  }
-
-  async function createMeetingDirectly() {
-    await saveMeeting({
-      date: meetingForm.date,
-      table: meetingForm.table,
-      start: meetingForm.start,
-      end: meetingForm.end,
-      members: [],
-    });
-  }
-
-  async function createMeetingFromSelected() {
-    if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) {
-      showToast("공통 가능 시간이 있을 때만 등록할 수 있습니다.", "warning");
-      return;
-    }
-
-    const membersToSave = selectedTimelineEntries.map((entry) => entry.nickname);
-    if (membersToSave.length !== 4) {
-      showToast("4명을 선택해야 이 방식으로 생성할 수 있습니다.", "warning");
-      return;
-    }
-
-    const duplicate = dayMeetings.some((meeting) => {
-      return (
-        meeting.date === selectedDate &&
-        meeting.table === selectedTimelineInfo.table &&
-        meeting.start === selectedTimelineInfo.start &&
-        meeting.end === selectedTimelineInfo.end &&
-        sameMembers(meeting.members, [...new Set([currentUser, ...membersToSave])])
-      );
-    });
-
-    if (duplicate) {
-      showToast("이미 같은 모임 일정이 등록되어 있습니다.", "warning");
-      return;
-    }
-
-    await saveMeeting({
-      date: selectedDate,
-      table: selectedTimelineInfo.table,
-      start: selectedTimelineInfo.start,
-      end: selectedTimelineInfo.end,
-      members: membersToSave,
-    });
-  }
-
-  async function joinMeeting(meetingId: string) {
-    if (!currentUser) {
-      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
-      return;
-    }
-
-    setConfirmingMeetingId(meetingId);
-
-    try {
-      const res = await fetch("/api/mahjong", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "joinMeeting",
-          meetingId,
-          nickname: currentUser,
-        }),
-      });
-
-      const data: SaveResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "모임 참가에 실패했습니다.");
-      }
-
-      showToast("모임에 참가했습니다.", "success");
-      await loadMeetings(selectedDate);
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "모임 참가 중 오류가 발생했습니다.",
-        "error"
-      );
-    } finally {
-      setConfirmingMeetingId(null);
-    }
-  }
-
-  async function leaveMeeting(meetingId: string) {
-    if (!currentUser) {
-      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
-      return;
-    }
-
-    const ok = window.confirm("이 모임에서 빠지시겠습니까?");
-    if (!ok) return;
-
-    setConfirmingMeetingId(meetingId);
-
-    try {
-      const res = await fetch("/api/mahjong", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "leaveMeeting",
-          meetingId,
-          nickname: currentUser,
-        }),
-      });
-
-      const data: SaveResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "모임 나가기에 실패했습니다.");
-      }
-
-      showToast("모임에서 빠졌습니다.", "success");
-      await loadMeetings(selectedDate);
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "모임 나가기 중 오류가 발생했습니다.",
-        "error"
-      );
-    } finally {
-      setConfirmingMeetingId(null);
-    }
-  }
-
-  async function confirmMeeting(meetingId: string) {
-    if (!currentUser) {
-      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
-      return;
-    }
-
-    setConfirmingMeetingId(meetingId);
-
-    try {
-      const res = await fetch("/api/mahjong", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "confirmMeeting",
-          meetingId,
-          nickname: currentUser,
-        }),
-      });
-
-      const data: SaveResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "참가확정에 실패했습니다.");
-      }
-
-      showToast(
-        data.status === "confirmed"
-          ? "전원 참가확정으로 모임이 확정되었습니다."
-          : "참가확정이 완료되었습니다.",
-        "success"
-      );
-
-      await loadMeetings(selectedDate);
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "참가확정 중 오류가 발생했습니다.",
-        "error"
-      );
-    } finally {
-      setConfirmingMeetingId(null);
-    }
-  }
-
-  async function cancelMeetingConfirm(meetingId: string) {
-    if (!currentUser) {
-      showToast("우측 상단에서 닉네임을 먼저 선택해주세요.", "warning");
-      return;
-    }
-
-    const ok = window.confirm("참가확정을 취소하시겠습니까?");
-    if (!ok) return;
-
-    setConfirmingMeetingId(meetingId);
-
-    try {
-      const res = await fetch("/api/mahjong", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "cancelMeetingConfirm",
-          meetingId,
-          nickname: currentUser,
-        }),
-      });
-
-      const data: SaveResponse = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "참가취소에 실패했습니다.");
-      }
-
-      showToast("참가확정이 취소되었습니다.", "success");
-      await loadMeetings(selectedDate);
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "참가취소 중 오류가 발생했습니다.",
-        "error"
-      );
-    } finally {
-      setConfirmingMeetingId(null);
     }
   }
 
@@ -1168,14 +647,6 @@ ${needed}인 모집중입니다.
 
       if (exists) {
         return prev.filter((item) => item.id !== entry.id);
-      }
-
-      if (prev.length === 0) return [entry];
-
-      const selectedTable = prev[0].table;
-      if (selectedTable !== entry.table) {
-        showToast("다른 탁은 선택할 수 없습니다.", "warning");
-        return prev;
       }
 
       if (prev.length >= 4) {
@@ -1284,6 +755,7 @@ ${needed}인 모집중입니다.
     });
     setNicknameQuery(item.nickname);
     setShowNicknameSuggestions(false);
+    setSelectedTimelineEntries([item]);
     setTab("input");
     setMessageText("");
   }
@@ -1308,6 +780,7 @@ ${needed}인 모집중입니다.
       }
 
       showToast("일정을 삭제했어요.", "success");
+      setSelectedTimelineEntries((prev) => prev.filter((item) => item.id !== id));
       await loadSchedules(selectedDate);
 
       if (editingId === id) {
@@ -1435,247 +908,6 @@ ${needed}인 모집중입니다.
             <div className="space-y-3 p-3">
               <div className="rounded-3xl border bg-slate-50 p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">
-                    모임 직접 만들기
-                  </h2>
-                  <span className="text-xs text-slate-400">
-                    생성자는 자동 확정
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      날짜
-                    </label>
-                    <input
-                      type="date"
-                      value={meetingForm.date}
-                      onChange={(e) =>
-                        setMeetingForm((prev) => ({ ...prev, date: e.target.value }))
-                      }
-                      className="w-full rounded-2xl border px-4 py-3 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      시작시간
-                    </label>
-                    <select
-                      value={meetingForm.start}
-                      onChange={(e) =>
-                        setMeetingForm((prev) => ({ ...prev, start: e.target.value }))
-                      }
-                      className="w-full rounded-2xl border px-3 py-3 text-sm"
-                    >
-                      {timeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      종료시간
-                    </label>
-                    <select
-                      value={meetingForm.end}
-                      onChange={(e) =>
-                        setMeetingForm((prev) => ({ ...prev, end: e.target.value }))
-                      }
-                      className="w-full rounded-2xl border px-3 py-3 text-sm"
-                    >
-                      {timeOptions.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      탁
-                    </label>
-                    <select
-                      value={meetingForm.table}
-                      onChange={(e) =>
-                        setMeetingForm((prev) => ({
-                          ...prev,
-                          table: e.target.value as TableType,
-                        }))
-                      }
-                      className="w-full rounded-2xl border px-4 py-3 text-sm"
-                    >
-                      <option value="1탁">1탁</option>
-                      <option value="2탁">2탁</option>
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={createMeetingDirectly}
-                  disabled={savingMeeting}
-                  className="mt-4 w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {savingMeeting ? "모임 생성 중..." : "모임 만들기"}
-                </button>
-              </div>
-
-              <div className="rounded-3xl border bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">모임 일정</h2>
-                  <span className="text-xs text-slate-400">
-                    {loadingMeetings ? "불러오는 중..." : `${dayMeetings.length}건`}
-                  </span>
-                </div>
-
-                {loadingMeetings ? (
-                  <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
-                    모임 일정을 불러오는 중입니다.
-                  </div>
-                ) : dayMeetings.length === 0 ? (
-                  <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-500">
-                    아직 등록된 모임 일정이 없습니다.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {dayMeetings.map((meeting) => {
-                      const isMember = currentUser
-                        ? meeting.members.includes(currentUser)
-                        : false;
-                      const isConfirmedByMe = currentUser
-                        ? meeting.confirmedMembers.includes(currentUser)
-                        : false;
-                      const isFull = meeting.members.length >= 4;
-                      const allConfirmed =
-                        meeting.status === "confirmed" ||
-                        (meeting.members.length === 4 &&
-                          meeting.members.every((name) =>
-                            meeting.confirmedMembers.includes(name)
-                          ));
-
-                      return (
-                        <div
-                          key={meeting.id}
-                          className={`rounded-2xl border px-3 py-3 ${
-                            allConfirmed
-                              ? "border-emerald-200 bg-emerald-50"
-                              : "border-amber-200 bg-white"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-slate-800">
-                              {meeting.table} · {meeting.start} ~ {meeting.end}
-                            </div>
-                            <div
-                              className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
-                                allConfirmed
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {allConfirmed ? "확정완료" : "확정대기"}
-                            </div>
-                          </div>
-
-                          <div className="mt-2 text-sm text-slate-600">
-                            참가자:{" "}
-                            {meeting.members.length > 0
-                              ? meeting.members.join(", ")
-                              : "없음"}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            확정:{" "}
-                            {meeting.confirmedMembers.length > 0
-                              ? meeting.confirmedMembers.join(", ")
-                              : "아직 없음"}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            현재 인원: {meeting.members.length}/4
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            모집 상태:{" "}
-                            {meeting.members.length < 4
-                              ? `${4 - meeting.members.length}명 모집중`
-                              : "정원 완료"}
-                          </div>
-
-                          <div className="mt-3 space-y-2">
-                            {isMember ? (
-                              <>
-                                {isConfirmedByMe ? (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="rounded-2xl bg-slate-100 px-4 py-2 text-center text-sm font-semibold text-slate-600">
-                                      참가확정 완료
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        cancelMeetingConfirm(meeting.id)
-                                      }
-                                      disabled={confirmingMeetingId === meeting.id}
-                                      className="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                                    >
-                                      {confirmingMeetingId === meeting.id
-                                        ? "처리 중..."
-                                        : "확정 취소"}
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => confirmMeeting(meeting.id)}
-                                    disabled={confirmingMeetingId === meeting.id}
-                                    className="w-full rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                                  >
-                                    {confirmingMeetingId === meeting.id
-                                      ? "처리 중..."
-                                      : "참가확정"}
-                                  </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => leaveMeeting(meeting.id)}
-                                  disabled={confirmingMeetingId === meeting.id}
-                                  className="w-full rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                                >
-                                  {confirmingMeetingId === meeting.id
-                                    ? "처리 중..."
-                                    : "모임에서 빠지기"}
-                                </button>
-                              </>
-                            ) : isFull ? (
-                              <div className="rounded-2xl bg-slate-100 px-4 py-2 text-center text-sm font-semibold text-slate-500">
-                                정원 마감
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => joinMeeting(meeting.id)}
-                                disabled={confirmingMeetingId === meeting.id}
-                                className="w-full rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                              >
-                                {confirmingMeetingId === meeting.id
-                                  ? "처리 중..."
-                                  : "이 모임 참가"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-3xl border bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">메모</h2>
                   <span className="text-xs text-slate-400">
                     선택 닉네임: {currentUser || "없음"}
@@ -1774,7 +1006,7 @@ ${needed}인 모집중입니다.
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                  <span className="text-xs text-slate-400">막대를 눌러 4명 선택</span>
+                  <span className="text-xs text-slate-400">막대를 눌러 선택</span>
                 </div>
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
@@ -1788,36 +1020,17 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div className="relative h-[960px]">
-                    {timeOptions.map((time, i) => {
-                      const selectedActive =
-                        leftAxisHighlight &&
-                        isSlotInRange(
-                          i,
-                          leftAxisHighlight.startSlot,
-                          leftAxisHighlight.endSlot
-                        );
-                      const meetingActive = confirmedSlotsByTable["1탁"].has(i);
-
-                      return (
-                        <div
-                          key={`left-${time}`}
-                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px]"
-                          style={{ top: `${i * 20}px` }}
-                        >
-                          <span
-                            className={`rounded-md px-1.5 py-0.5 ${
-                              selectedActive
-                                ? "bg-amber-200/90 font-semibold text-amber-900"
-                                : meetingActive
-                                ? "bg-emerald-200/90 font-semibold text-emerald-900"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {time}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {timeOptions.map((time, i) => (
+                      <div
+                        key={`left-${time}`}
+                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px]"
+                        style={{ top: `${i * 20}px` }}
+                      >
+                        <span className="rounded-md px-1.5 py-0.5 text-slate-400">
+                          {time}
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
@@ -1828,28 +1041,6 @@ ${needed}인 모집중입니다.
                         style={{ top: `${i * 20}px` }}
                       />
                     ))}
-
-                    {confirmedMeetings
-                      .filter((meeting) => meeting.table === "1탁")
-                      .map((meeting) => {
-                        const start = timeToSlot(meeting.start);
-                        const end = timeToSlot(meeting.end);
-
-                        return (
-                          <div
-                            key={`meeting-1-${meeting.id}`}
-                            className="absolute left-1 right-1 rounded-xl border border-emerald-300 bg-emerald-200/50"
-                            style={{
-                              top: `${start * 20}px`,
-                              height: `${(end - start) * 20}px`,
-                            }}
-                          >
-                            <div className="px-2 py-1 text-[10px] font-semibold text-emerald-900">
-                              확정 모임
-                            </div>
-                          </div>
-                        );
-                      })}
 
                     {timelineByTable["1탁"].map((entry) => {
                       const start = timeToSlot(entry.start);
@@ -1886,36 +1077,17 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div className="relative h-[960px]">
-                    {timeOptions.map((time, i) => {
-                      const selectedActive =
-                        centerAxisHighlight &&
-                        isSlotInRange(
-                          i,
-                          centerAxisHighlight.startSlot,
-                          centerAxisHighlight.endSlot
-                        );
-                      const meetingActive = confirmedSlotsByTable["2탁"].has(i);
-
-                      return (
-                        <div
-                          key={`center-${time}`}
-                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-center text-[10px]"
-                          style={{ top: `${i * 20}px` }}
-                        >
-                          <span
-                            className={`rounded-md px-1.5 py-0.5 ${
-                              selectedActive
-                                ? "bg-amber-200/90 font-semibold text-amber-900"
-                                : meetingActive
-                                ? "bg-indigo-200/90 font-semibold text-indigo-900"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {time}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {timeOptions.map((time, i) => (
+                      <div
+                        key={`center-${time}`}
+                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-center text-[10px]"
+                        style={{ top: `${i * 20}px` }}
+                      >
+                        <span className="rounded-md px-1.5 py-0.5 text-slate-400">
+                          {time}
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
@@ -1926,28 +1098,6 @@ ${needed}인 모집중입니다.
                         style={{ top: `${i * 20}px` }}
                       />
                     ))}
-
-                    {confirmedMeetings
-                      .filter((meeting) => meeting.table === "2탁")
-                      .map((meeting) => {
-                        const start = timeToSlot(meeting.start);
-                        const end = timeToSlot(meeting.end);
-
-                        return (
-                          <div
-                            key={`meeting-2-${meeting.id}`}
-                            className="absolute left-1 right-1 rounded-xl border border-indigo-300 bg-indigo-200/50"
-                            style={{
-                              top: `${start * 20}px`,
-                              height: `${(end - start) * 20}px`,
-                            }}
-                          >
-                            <div className="px-2 py-1 text-[10px] font-semibold text-indigo-900">
-                              확정 모임
-                            </div>
-                          </div>
-                        );
-                      })}
 
                     {timelineByTable["2탁"].map((entry) => {
                       const start = timeToSlot(entry.start);
@@ -2173,95 +1323,6 @@ ${needed}인 모집중입니다.
                 </p>
               </div>
 
-              {myMeetings.length > 0 && (
-                <div className="mb-3 rounded-3xl border bg-slate-50 p-4">
-                  <h3 className="text-base font-semibold text-slate-800">
-                    내가 참가 중인 모임
-                  </h3>
-                  <div className="mt-3 space-y-2">
-                    {myMeetings.map((meeting) => {
-                      const isConfirmedByMe = meeting.confirmedMembers.includes(
-                        currentUser
-                      );
-                      const allConfirmed =
-                        meeting.status === "confirmed" ||
-                        (meeting.members.length === 4 &&
-                          meeting.members.every((name) =>
-                            meeting.confirmedMembers.includes(name)
-                          ));
-
-                      return (
-                        <div key={meeting.id} className="rounded-2xl bg-white px-3 py-3">
-                          <div className="text-sm font-semibold text-slate-800">
-                            {meeting.date} · {meeting.table}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-600">
-                            {meeting.start} ~ {meeting.end}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            참가자: {meeting.members.join(", ")}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            확정자:{" "}
-                            {meeting.confirmedMembers.length > 0
-                              ? meeting.confirmedMembers.join(", ")
-                              : "없음"}
-                          </div>
-
-                          <div className="mt-2 space-y-2">
-                            {isConfirmedByMe ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="rounded-2xl bg-slate-100 px-4 py-2 text-center text-sm font-semibold text-slate-600">
-                                  참가확정 완료
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => cancelMeetingConfirm(meeting.id)}
-                                  disabled={confirmingMeetingId === meeting.id}
-                                  className="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                                >
-                                  {confirmingMeetingId === meeting.id
-                                    ? "처리 중..."
-                                    : "확정 취소"}
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => confirmMeeting(meeting.id)}
-                                disabled={confirmingMeetingId === meeting.id}
-                                className="w-full rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                              >
-                                {confirmingMeetingId === meeting.id
-                                  ? "처리 중..."
-                                  : "참가확정"}
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => leaveMeeting(meeting.id)}
-                              disabled={confirmingMeetingId === meeting.id}
-                              className="w-full rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                            >
-                              {confirmingMeetingId === meeting.id
-                                ? "처리 중..."
-                                : "모임에서 빠지기"}
-                            </button>
-
-                            {allConfirmed && (
-                              <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-center text-sm font-semibold text-emerald-700">
-                                확정 완료
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               <div className="space-y-3">
                 {myEntries.length === 0 ? (
                   <div className="rounded-3xl border bg-slate-50 p-6 text-sm text-slate-500">
@@ -2317,7 +1378,7 @@ ${needed}인 모집중입니다.
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-base font-semibold text-slate-800">
-                    선택 인원 {selectedTimelineEntries.length} / 4
+                    선택 인원 {selectedTimelineEntries.length}
                   </div>
                   <div className="mt-1 text-sm text-slate-600">
                     {selectedTimelineEntries.map((entry) => entry.nickname).join(", ")}
@@ -2333,9 +1394,17 @@ ${needed}인 모집중입니다.
                 </button>
               </div>
 
-              {selectedTimelineEntries.length === 1 && (
-                <div className="mt-4 space-y-2">
-                  <div className="grid grid-cols-1 gap-2">
+              <div className="mt-4 grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={copySelectedBarsMessage}
+                  className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                >
+                  카톡 복사
+                </button>
+
+                {selectedTimelineEntries.length === 1 && (
+                  <>
                     <button
                       type="button"
                       onClick={() => editEntry(selectedTimelineEntries[0])}
@@ -2345,65 +1414,17 @@ ${needed}인 모집중입니다.
                     </button>
                     <button
                       type="button"
-                      onClick={copySinglePromoMessage}
-                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                      onClick={() => deleteEntry(selectedTimelineEntries[0].id)}
+                      disabled={deletingId !== null}
+                      className="rounded-2xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      홍보카톡 복사
+                      {deletingId === selectedTimelineEntries[0].id
+                        ? "삭제중..."
+                        : "일정 삭제"}
                     </button>
-                  </div>
-                </div>
-              )}
-
-              {selectedTimelineEntries.length > 1 &&
-                selectedTimelineEntries.length < 4 && (
-                  <div className="mt-4 grid grid-cols-1 gap-2">
-                    <button
-                      type="button"
-                      onClick={copyMultiPromoMessage}
-                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
-                    >
-                      홍보카톡 복사
-                    </button>
-                  </div>
+                  </>
                 )}
-
-              {selectedTimelineInfo && selectedTimelineEntries.length === 4 && (
-                <div className="mt-4">
-                  {selectedTimelineInfo.hasCommonTime ? (
-                    <>
-                      <div className="text-sm font-semibold text-slate-800">
-                        공통 가능 시간
-                      </div>
-                      <div className="mt-1 text-sm text-slate-700">
-                        {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~{" "}
-                        {selectedTimelineInfo.end}
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 gap-2">
-                        <button
-                          type="button"
-                          onClick={copySelectedGroupMessage}
-                          className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
-                        >
-                          카톡 복사
-                        </button>
-                        <button
-                          type="button"
-                          onClick={createMeetingFromSelected}
-                          disabled={savingMeeting}
-                          className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                        >
-                          {savingMeeting ? "모임 등록 중..." : "모임 일정 등록"}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-sm font-semibold text-rose-700">
-                      선택한 4명의 공통 가능 시간이 없습니다.
-                    </div>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
           </div>
         )}
