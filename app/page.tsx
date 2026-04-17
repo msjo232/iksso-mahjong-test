@@ -70,8 +70,13 @@ function getToday() {
 }
 
 function isSameOrAfterToday(dateString: string) {
-  const today = getToday();
-  return dateString >= today;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return false;
+
+  return target >= today;
 }
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -1181,7 +1186,7 @@ ${needed}인 모집중입니다.
                   <span className="pt-0.5 text-xs text-slate-400">막대를 눌러 선택</span>
                 </div>
 
-                <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
+                <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)_50px] gap-2">
                   <div />
                   <div className="text-center text-xs font-semibold text-emerald-700">
                     1탁
@@ -1190,6 +1195,7 @@ ${needed}인 모집중입니다.
                   <div className="text-center text-xs font-semibold text-indigo-700">
                     2탁
                   </div>
+                  <div />
 
                   <div className="relative h-[960px]">
                     {timeOptions.map((time, i) => {
@@ -1335,6 +1341,20 @@ ${needed}인 모집중입니다.
                         </button>
                       );
                     })}
+                  </div>
+
+                  <div className="relative h-[960px]">
+                    {timeOptions.map((time, i) => (
+                      <div
+                        key={`right-${time}`}
+                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-end text-[10px]"
+                        style={{ top: `${i * 20}px` }}
+                      >
+                        <span className="rounded-md px-1.5 py-0.5 text-slate-400">
+                          {time}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1530,7 +1550,7 @@ ${needed}인 모집중입니다.
               <div className="space-y-3">
                 {myEntries.length === 0 ? (
                   <div className="rounded-3xl border bg-slate-50 p-6 text-sm text-slate-500">
-                    오늘 포함 이후 등록된 일정이 없습니다.
+                    오늘 포함 미래 일정이 없습니다.
                   </div>
                 ) : (
                   myEntries.map((item) => (
