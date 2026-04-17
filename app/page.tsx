@@ -1051,13 +1051,7 @@ ${needed}인 모집중입니다.
               <div className="rounded-3xl border bg-slate-50 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">메모</h2>
-                  <span className="text-xs text-slate-400">
-                    선택 닉네임: {currentUser || "없음"}
-                  </span>
-                </div>
-
-                <div className="mb-3 text-sm text-slate-500">
-                  일정 삭제와 별개로 메모는 따로 보관됩니다.
+                  <span />
                 </div>
 
                 <div className="space-y-2">
@@ -1116,7 +1110,7 @@ ${needed}인 모집중입니다.
 
                 <div className="mt-3 rounded-2xl bg-white p-3">
                   <div className="mb-2 text-sm font-medium text-slate-700">
-                    추가 메모 작성
+                    메모 작성
                   </div>
                   <textarea
                     value={memoInput}
