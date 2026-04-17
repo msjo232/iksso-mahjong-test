@@ -270,6 +270,7 @@ export default function Page() {
   const [currentUser, setCurrentUser] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [allEntries, setAllEntries] = useState<Entry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -376,6 +377,29 @@ export default function Page() {
     }
   }
 
+  async function loadAllSchedules() {
+    try {
+      const res = await fetch("/api/mahjong?action=schedules", {
+        cache: "no-store",
+      });
+      const data: SchedulesResponse = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "전체 일정 데이터를 불러오지 못했습니다.");
+      }
+
+      setAllEntries((data.schedules || []).map(normalizeEntry));
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "전체 일정 데이터를 불러오는 중 오류가 발생했습니다.",
+        "error"
+      );
+      setAllEntries([]);
+    }
+  }
+
   async function loadMemos(date: string) {
     setLoadingMemos(true);
     try {
@@ -405,6 +429,7 @@ export default function Page() {
 
   useEffect(() => {
     loadMembers();
+    loadAllSchedules();
   }, []);
 
   useEffect(() => {
@@ -485,17 +510,14 @@ export default function Page() {
 
   const myEntries = useMemo(() => {
     return currentUser
-      ? entries
-          .filter(
-            (item) =>
-              item.nickname === currentUser && isSameOrAfterToday(item.date)
-          )
+      ? [...allEntries]
+          .filter((item) => item.nickname === currentUser)
           .sort((a, b) => {
             if (a.date !== b.date) return a.date.localeCompare(b.date);
             return timeToSlot(a.start) - timeToSlot(b.start);
           })
       : [];
-  }, [entries, currentUser]);
+  }, [allEntries, currentUser]);
 
   const mergedMemos = useMemo(() => {
     return [...memos].sort((a, b) => {
@@ -712,6 +734,7 @@ ${needed}인 모집중입니다.
       showToast("메모가 삭제되었습니다.", "success");
       await loadMemos(selectedDate);
       await loadSchedules(selectedDate);
+      await loadAllSchedules();
     } catch (error) {
       showToast(
         error instanceof Error
@@ -832,7 +855,7 @@ ${needed}인 모집중입니다.
       setTab("my");
       setEditingId(null);
 
-      await Promise.all([loadSchedules(form.date), loadMemos(form.date)]);
+      await Promise.all([loadSchedules(form.date), loadMemos(form.date), loadAllSchedules()]);
 
       setForm({
         nickname: form.nickname,
@@ -894,6 +917,7 @@ ${needed}인 모집중입니다.
       setSelectedTimelineEntries((prev) => prev.filter((item) => item.id !== id));
       await loadSchedules(selectedDate);
       await loadMemos(selectedDate);
+      await loadAllSchedules();
 
       if (editingId === id) {
         resetForm();
@@ -1438,7 +1462,7 @@ ${needed}인 모집중입니다.
               <div className="space-y-3">
                 {myEntries.length === 0 ? (
                   <div className="rounded-3xl border bg-slate-50 p-6 text-sm text-slate-500">
-                    오늘 이후 등록된 일정이 없습니다.
+                    등록된 일정이 없습니다.
                   </div>
                 ) : (
                   myEntries.map((item) => (
@@ -1485,8 +1509,8 @@ ${needed}인 모집중입니다.
         </main>
 
         {selectedTimelineEntries.length > 0 && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-3 pt-16">
-            <div className="w-full max-w-md rounded-3xl border bg-white p-4 shadow-2xl">
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center px-3 pt-4">
+            <div className="pointer-events-auto w-full max-w-md rounded-3xl border bg-white p-4 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-base font-semibold text-slate-800">
