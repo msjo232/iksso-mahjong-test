@@ -184,6 +184,10 @@ function assignLanes(entries: Entry[]): TimelineEntry[] {
   });
 }
 
+function isSlotInRange(slot: number, startSlot: number, endSlot: number) {
+  return slot >= startSlot && slot <= endSlot;
+}
+
 function formatDateTime(value?: string) {
   if (!value) return "";
   const date = new Date(value.replace(" ", "T"));
@@ -577,6 +581,24 @@ export default function Page() {
       names: selectedTimelineEntries.map((entry) => entry.nickname),
     };
   }, [selectedTimelineEntries]);
+
+  const leftAxisHighlight = useMemo(() => {
+    if (!selectedCommonInfo?.hasCommonTime) return null;
+    if (selectedCommonInfo.table !== "1탁") return null;
+    return {
+      startSlot: timeToSlot(selectedCommonInfo.start),
+      endSlot: timeToSlot(selectedCommonInfo.end),
+    };
+  }, [selectedCommonInfo]);
+
+  const centerAxisHighlight = useMemo(() => {
+    if (!selectedCommonInfo?.hasCommonTime) return null;
+    if (selectedCommonInfo.table !== "2탁") return null;
+    return {
+      startSlot: timeToSlot(selectedCommonInfo.start),
+      endSlot: timeToSlot(selectedCommonInfo.end),
+    };
+  }, [selectedCommonInfo]);
 
   function buildSinglePromoMessage() {
     if (selectedTimelineEntries.length !== 1) return "";
@@ -1156,17 +1178,33 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div className="relative h-[960px]">
-                    {timeOptions.map((time, i) => (
-                      <div
-                        key={`left-${time}`}
-                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px]"
-                        style={{ top: `${i * 20}px` }}
-                      >
-                        <span className="rounded-md px-1.5 py-0.5 text-slate-400">
-                          {time}
-                        </span>
-                      </div>
-                    ))}
+                    {timeOptions.map((time, i) => {
+                      const active = leftAxisHighlight
+                        ? isSlotInRange(
+                            i,
+                            leftAxisHighlight.startSlot,
+                            leftAxisHighlight.endSlot
+                          )
+                        : false;
+
+                      return (
+                        <div
+                          key={`left-${time}`}
+                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start text-[10px]"
+                          style={{ top: `${i * 20}px` }}
+                        >
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 ${
+                              active
+                                ? "bg-amber-200/90 font-semibold text-amber-900"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {time}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
@@ -1213,17 +1251,33 @@ ${needed}인 모집중입니다.
                   </div>
 
                   <div className="relative h-[960px]">
-                    {timeOptions.map((time, i) => (
-                      <div
-                        key={`center-${time}`}
-                        className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-center text-[10px]"
-                        style={{ top: `${i * 20}px` }}
-                      >
-                        <span className="rounded-md px-1.5 py-0.5 text-slate-400">
-                          {time}
-                        </span>
-                      </div>
-                    ))}
+                    {timeOptions.map((time, i) => {
+                      const active = centerAxisHighlight
+                        ? isSlotInRange(
+                            i,
+                            centerAxisHighlight.startSlot,
+                            centerAxisHighlight.endSlot
+                          )
+                        : false;
+
+                      return (
+                        <div
+                          key={`center-${time}`}
+                          className="absolute left-0 right-0 flex h-5 -translate-y-1/2 items-start justify-center text-[10px]"
+                          style={{ top: `${i * 20}px` }}
+                        >
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 ${
+                              active
+                                ? "bg-amber-200/90 font-semibold text-amber-900"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {time}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="relative h-[960px] overflow-hidden rounded-2xl bg-slate-50">
@@ -1470,7 +1524,7 @@ ${needed}인 모집중입니다.
                       <div className="flex flex-col gap-3">
                         <div>
                           <div className="text-base font-semibold text-slate-800">
-                            {item.date}
+                            {item.date} ({getKoreanWeekday(item.date)})
                           </div>
                           <div className="mt-1 text-sm text-slate-600">
                             {item.start} ~ {item.end} · {item.table}
