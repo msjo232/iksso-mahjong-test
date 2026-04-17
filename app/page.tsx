@@ -208,6 +208,12 @@ function formatMemoDateTime(value?: string) {
   return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
+function getKoreanWeekday(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return weekdays[date.getDay()] || "";
+}
+
 export default function Page() {
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
@@ -450,7 +456,7 @@ export default function Page() {
   }, [entries, currentUser]);
 
   const selectedTimelineInfo = useMemo(() => {
-    if (selectedTimelineEntries.length !== 4) return null;
+    if (selectedTimelineEntries.length < 2) return null;
 
     const table = selectedTimelineEntries[0].table;
     const allSameTable = selectedTimelineEntries.every(
@@ -1046,7 +1052,7 @@ ${memberLines}
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                  <span className="text-xs text-slate-400">막대를 눌러 4명 선택</span>
+                  <span className="text-xs text-slate-400">막대를 눌러 선택</span>
                 </div>
 
                 {selectedTimelineEntries.length > 0 && (
@@ -1060,9 +1066,34 @@ ${memberLines}
                         .join(", ")}
                     </div>
 
-                    {selectedTimelineInfo && selectedTimelineEntries.length === 4 && (
+                    {selectedTimelineEntries.length === 1 ? (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={copySinglePromoMessage}
+                          className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                        >
+                          카톡 홍보
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => editEntry(selectedTimelineEntries[0])}
+                          className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteEntry(selectedTimelineEntries[0].id)}
+                          disabled={deletingId !== null}
+                          className="rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {deletingId === selectedTimelineEntries[0].id ? "삭제중..." : "삭제"}
+                        </button>
+                      </div>
+                    ) : (
                       <div className="mt-3">
-                        {selectedTimelineInfo.hasCommonTime ? (
+                        {selectedTimelineInfo?.hasCommonTime ? (
                           <>
                             <div className="text-sm font-semibold text-slate-800">
                               공통 가능 시간
@@ -1074,10 +1105,10 @@ ${memberLines}
                             <div className="mt-3 grid grid-cols-2 gap-2">
                               <button
                                 type="button"
-                                onClick={copySelectedGroupMessage}
+                                onClick={copyCommonPromoMessage}
                                 className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
                               >
-                                선택 인원 카톡 복사
+                                카톡 홍보 복사
                               </button>
                               <button
                                 type="button"
@@ -1091,7 +1122,7 @@ ${memberLines}
                         ) : (
                           <>
                             <div className="text-sm font-semibold text-rose-700">
-                              선택한 4명의 공통 가능 시간이 없습니다.
+                              선택한 일정들의 공통시간이 없습니다.
                             </div>
                             <div className="mt-3">
                               <button
