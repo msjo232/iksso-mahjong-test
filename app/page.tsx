@@ -1176,14 +1176,18 @@ ${needed}인 모집중입니다.
               </div>
 
               <div className="rounded-3xl border bg-white p-3">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
+                <div className="mb-3">
+                  <div className="flex items-start justify-between gap-3">
                     <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                    <div className="mt-1 text-sm font-medium text-slate-500">
-                      {formatKoreanDate(selectedDate)}
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-slate-500">
+                        {formatKoreanDate(selectedDate)}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-400">
+                        막대를 눌러 선택
+                      </div>
                     </div>
                   </div>
-                  <span className="pt-0.5 text-xs text-slate-400">막대를 눌러 선택</span>
                 </div>
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
