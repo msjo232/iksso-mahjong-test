@@ -511,7 +511,10 @@ export default function Page() {
   const myEntries = useMemo(() => {
     return currentUser
       ? [...allEntries]
-          .filter((item) => item.nickname === currentUser)
+          .filter(
+            (item) =>
+              item.nickname === currentUser && isSameOrAfterToday(item.date)
+          )
           .sort((a, b) => {
             if (a.date !== b.date) return a.date.localeCompare(b.date);
             return timeToSlot(a.start) - timeToSlot(b.start);
@@ -710,7 +713,7 @@ ${needed}인 모집중입니다.
       return;
     }
 
-    const ok = window.confirm("삭제하시겠습니까?");
+    const ok = window.confirm("정말 삭제하시겠습니까?");
     if (!ok) return;
 
     setDeletingMemoId(id);
@@ -895,6 +898,9 @@ ${needed}인 모집중입니다.
   }
 
   async function deleteEntry(id: string) {
+    const ok = window.confirm("정말 삭제하시겠습니까?");
+    if (!ok) return;
+
     setDeletingId(id);
 
     try {
@@ -1462,7 +1468,7 @@ ${needed}인 모집중입니다.
               <div className="space-y-3">
                 {myEntries.length === 0 ? (
                   <div className="rounded-3xl border bg-slate-50 p-6 text-sm text-slate-500">
-                    등록된 일정이 없습니다.
+                    오늘 포함 이후 등록된 일정이 없습니다.
                   </div>
                 ) : (
                   myEntries.map((item) => (
