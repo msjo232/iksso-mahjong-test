@@ -1356,7 +1356,9 @@ ${needed}인 모집중입니다.
               <div className="rounded-3xl border bg-slate-50 p-4">
                 <h2 className="text-lg font-semibold text-slate-800">가능 시간 입력</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  원하는 날짜와 시간을 입력하세요. 하루 기준은 06:00 ~ 익일 05:30입니다.
+                  원하는 날짜와 시간을 입력하세요.
+                  <br />
+                  하루 기준은 06:00 ~ 익일 05:30입니다.
                 </p>
 
                 <form onSubmit={saveEntry} className="mt-4 space-y-4">
