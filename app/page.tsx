@@ -148,6 +148,12 @@ function slotToTime(slot: number) {
   return `${h}:${m}`;
 }
 
+function getKoreanWeekday(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return weekdays[date.getDay()] || "";
+}
+
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   const aS = timeToSlot(aStart);
   const aE = timeToSlot(aEnd);
@@ -206,12 +212,6 @@ function formatMemoDateTime(value?: string) {
   const mm = String(date.getMinutes()).padStart(2, "0");
 
   return `${y}-${m}-${d} ${hh}:${mm}`;
-}
-
-function getKoreanWeekday(dateString: string) {
-  const date = new Date(`${dateString}T00:00:00`);
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return weekdays[date.getDay()] || "";
 }
 
 export default function Page() {
@@ -456,7 +456,7 @@ export default function Page() {
   }, [entries, currentUser]);
 
   const selectedTimelineInfo = useMemo(() => {
-    if (selectedTimelineEntries.length < 2) return null;
+    if (selectedTimelineEntries.length !== 4) return null;
 
     const table = selectedTimelineEntries[0].table;
     const allSameTable = selectedTimelineEntries.every(
@@ -535,6 +535,121 @@ export default function Page() {
       return aTime - bTime;
     });
   }, [memos]);
+
+
+  const selectedCommonInfo = useMemo(() => {
+    if (selectedTimelineEntries.length < 2) return null;
+
+    const first = selectedTimelineEntries[0];
+    const sameTable = selectedTimelineEntries.every(
+      (entry) => entry.table === first.table
+    );
+
+    if (!sameTable) {
+      return {
+        hasCommonTime: false,
+        table: first.table,
+        start: "",
+        end: "",
+        names: selectedTimelineEntries.map((entry) => entry.nickname),
+      };
+    }
+
+    const startSlot = Math.max(
+      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.start))
+    );
+    const endSlot = Math.min(
+      ...selectedTimelineEntries.map((entry) => timeToSlot(entry.end))
+    );
+
+    if (startSlot >= endSlot) {
+      return {
+        hasCommonTime: false,
+        table: first.table,
+        start: "",
+        end: "",
+        names: selectedTimelineEntries.map((entry) => entry.nickname),
+      };
+    }
+
+    return {
+      hasCommonTime: true,
+      table: first.table,
+      start: slotToTime(startSlot),
+      end: slotToTime(endSlot),
+      names: selectedTimelineEntries.map((entry) => entry.nickname),
+    };
+  }, [selectedTimelineEntries]);
+
+  function buildSinglePromoMessage() {
+    if (selectedTimelineEntries.length !== 1) return "";
+
+    const entry = selectedTimelineEntries[0];
+    const weekday = getKoreanWeekday(entry.date);
+
+    return `🀄 익쏘 마작 모집
+
+📅 ${entry.date} (${weekday})
+🕒 ${entry.start} ~ ${entry.end}
+🪑 ${entry.table}
+
+현재 가능 인원 1명
+${entry.nickname}
+
+3인 모집중입니다.
+
+참여 가능하신 분은 일정등록해주세요.`;
+  }
+
+  function buildCommonPromoMessage() {
+    if (!selectedCommonInfo || !selectedCommonInfo.hasCommonTime) return "";
+
+    const count = selectedTimelineEntries.length;
+    const needed = Math.max(0, 4 - count);
+    const names = selectedCommonInfo.names.join(", ");
+    const weekday = getKoreanWeekday(selectedDate);
+
+    return `🀄 익쏘 마작 모집
+
+📅 ${selectedDate} (${weekday})
+🕒 ${selectedCommonInfo.start} ~ ${selectedCommonInfo.end}
+🪑 ${selectedCommonInfo.table}
+
+현재 가능 인원 ${count}명
+${names}
+
+${needed}인 모집중입니다.
+
+참여 가능하신 분은 일정등록해주세요.`;
+  }
+
+  async function copySinglePromoMessage() {
+    const text = buildSinglePromoMessage();
+    if (!text) {
+      showToast("1명 선택 시에만 사용할 수 있습니다.", "warning");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("홍보 문구가 복사되었습니다.", "success");
+    } catch {
+      showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
+    }
+  }
+
+  async function copyCommonPromoMessage() {
+    const text = buildCommonPromoMessage();
+    if (!text) {
+      showToast("선택한 일정들의 공통시간이 없습니다.", "warning");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("홍보 문구가 복사되었습니다.", "success");
+    } catch {
+      showToast("복사에 실패했습니다. 브라우저 권한을 확인해주세요.", "error");
+    }
+  }
 
   function buildSelectedGroupMessage() {
     if (!selectedTimelineInfo || !selectedTimelineInfo.hasCommonTime) return "";
@@ -692,7 +807,7 @@ ${memberLines}
 
       const selectedTable = prev[0].table;
       if (selectedTable !== entry.table) {
-        showToast("다른 탁은 선택할 수 없습니다.", "warning");
+        showToast("다른 탁은 같이 선택할 수 없습니다.", "warning");
         return prev;
       }
 
@@ -1052,88 +1167,8 @@ ${memberLines}
               <div className="rounded-3xl border bg-white p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                  <span className="text-xs text-slate-400">막대를 눌러 선택</span>
+                  <span className="text-xs text-slate-400">막대를 눌러 4명 선택</span>
                 </div>
-
-                {selectedTimelineEntries.length > 0 && (
-                  <div className="fixed inset-0 z-40 bg-black/30 px-3 py-6">
-                    <div className="mx-auto mt-4 w-full max-w-md rounded-3xl border bg-white p-4 shadow-2xl">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-base font-semibold text-slate-800">
-                            선택 인원 {selectedTimelineEntries.length} / 4
-                          </div>
-                          <div className="mt-1 text-sm text-slate-600">
-                            {selectedTimelineEntries
-                              .map((entry) => entry.nickname)
-                              .join(", ")}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={clearSelectedTimelineEntries}
-                          className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
-                        >
-                          닫기
-                        </button>
-                      </div>
-
-                      {selectedTimelineEntries.length === 1 ? (
-                        <div className="mt-4 grid grid-cols-3 gap-2">
-                          <button
-                            type="button"
-                            onClick={copySinglePromoMessage}
-                            className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
-                          >
-                            카톡복사
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => editEntry(selectedTimelineEntries[0])}
-                            className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
-                          >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteEntry(selectedTimelineEntries[0].id)}
-                            disabled={deletingId !== null}
-                            className="rounded-2xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                          >
-                            {deletingId === selectedTimelineEntries[0].id ? "삭제중..." : "삭제"}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="mt-4">
-                          {selectedTimelineInfo?.hasCommonTime ? (
-                            <>
-                              <div className="text-sm font-semibold text-slate-800">
-                                공통 가능 시간
-                              </div>
-                              <div className="mt-1 text-sm text-slate-700">
-                                {selectedTimelineInfo.table} · {selectedTimelineInfo.start} ~{" "}
-                                {selectedTimelineInfo.end}
-                              </div>
-                              <div className="mt-4 grid grid-cols-1 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={copyCommonPromoMessage}
-                                  className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
-                                >
-                                  카톡복사
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-                              선택한 일정들의 공통시간이 없습니다.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
                   <div />
@@ -1533,6 +1568,84 @@ ${memberLines}
             </div>
           )}
         </main>
+
+        {selectedTimelineEntries.length > 0 && (
+          <div className="fixed inset-x-0 top-4 z-40 mx-auto w-[calc(100%-24px)] max-w-md px-0">
+            <div className="rounded-3xl border bg-white p-4 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-base font-semibold text-slate-800">
+                    선택 인원 {selectedTimelineEntries.length}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {selectedTimelineEntries.map((entry) => entry.nickname).join(", ")}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearSelectedTimelineEntries}
+                  className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                >
+                  닫기
+                </button>
+              </div>
+
+              {selectedTimelineEntries.length === 1 ? (
+                <div className="mt-4 grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={copySinglePromoMessage}
+                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    카톡복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => editEntry(selectedTimelineEntries[0])}
+                    className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteEntry(selectedTimelineEntries[0].id)}
+                    disabled={deletingId !== null}
+                    className="rounded-2xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {deletingId === selectedTimelineEntries[0].id ? "삭제중..." : "삭제"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  {selectedCommonInfo?.hasCommonTime ? (
+                    <>
+                      <div className="text-sm font-semibold text-slate-800">
+                        공통 가능 시간
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {selectedCommonInfo.table} · {selectedCommonInfo.start} ~ {selectedCommonInfo.end}
+                      </div>
+                      <div className="mt-4 grid grid-cols-1 gap-2">
+                        <button
+                          type="button"
+                          onClick={copyCommonPromoMessage}
+                          className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white"
+                        >
+                          카톡복사
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                      선택한 일정들의 공통시간이 없습니다.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white">
