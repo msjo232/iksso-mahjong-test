@@ -268,6 +268,15 @@ function getKoreanWeekday(dateString: string) {
   return weekdays[date.getDay()] || "";
 }
 
+function formatKoreanDate(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const weekday = getKoreanWeekday(dateString);
+  return `${y}. ${m}. ${d} (${weekday})`;
+}
+
 export default function Page() {
   const [tab, setTab] = useState<TabType>("timeline");
   const [selectedDate, setSelectedDate] = useState(getToday());
@@ -1162,9 +1171,14 @@ ${needed}인 모집중입니다.
               </div>
 
               <div className="rounded-3xl border bg-white p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
-                  <span className="text-xs text-slate-400">막대를 눌러 선택</span>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-800">타임라인</h2>
+                    <div className="mt-1 text-sm font-medium text-slate-500">
+                      {formatKoreanDate(selectedDate)}
+                    </div>
+                  </div>
+                  <span className="pt-0.5 text-xs text-slate-400">막대를 눌러 선택</span>
                 </div>
 
                 <div className="grid grid-cols-[50px_minmax(0,1fr)_50px_minmax(0,1fr)] gap-2">
